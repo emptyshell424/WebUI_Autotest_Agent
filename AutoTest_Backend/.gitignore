@@ -1,0 +1,14 @@
+# 忽略靶子系统 (因为它只是环境)
+vue-admin-template/
+
+# 忽略虚拟环境 (这是你本地的 Python 环境)
+venv/
+AutoTest_Backend/venv/
+
+# 忽略 Python 缓存
+__pycache__/
+*.pyc
+
+# 忽略 IDE 配置
+.vscode/
+.idea/
