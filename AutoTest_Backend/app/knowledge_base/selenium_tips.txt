@@ -1,0 +1,5 @@
+1. 显式等待原则：在查找元素之前，必须使用 WebDriverWait 配合 expected_conditions，严禁使用 time.sleep() 死等。
+2. 元素定位优先级：优先使用 ID 定位，其次是 CSS Selector，最后是 XPath。
+3. 异常处理：如果遇到 NoSuchElementException，可能是因为元素在 iframe 中，需要先 switch_to.frame。
+4. 页面加载：driver.get() 之后，建议等待 body 元素加载完成。
+5. 点击操作：如果 click() 报错 ElementClickInterceptedException，可以尝试用 JavaScript 点击：driver.execute_script("arguments[0].click();", element)。
