@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app.services.llm_service import llm
 from app.services.rag_service import rag
@@ -8,6 +9,19 @@ from app.services.executor_service import executor # 导入执行器
 
 
 app = FastAPI(title = "Web UI AutoTest")
+
+origins = [
+    "http://localhost:5173",    # Vite 默认端口
+    "http://127.0.0.1:5173",    # 有时候浏览器会用 IP 访问
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,      # <--- 替换掉 ["*"]
+    allow_credentials=True,
+    allow_methods=["*"],        # 允许所有方法 (POST, GET, PUT...)
+    allow_headers=["*"],        # 允许所有 Header
+)
 
 
 #  1. 定义请求的数据结构 (Schema)
@@ -63,4 +77,6 @@ async def debug_chat(request: ChatRequest):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=False)
+
+    
