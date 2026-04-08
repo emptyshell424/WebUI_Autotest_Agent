@@ -2,6 +2,7 @@ import shutil
 import unittest
 from pathlib import Path
 
+import tests._bootstrap
 from app.core.config import Settings
 from app.core.database import initialize_database
 from app.repositories import ExecutionRepository, TestCaseRepository
@@ -170,3 +171,4 @@ class SelfHealFlowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

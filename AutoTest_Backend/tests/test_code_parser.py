@@ -1,5 +1,6 @@
 import unittest
 
+import tests._bootstrap
 from app.utils.code_parser import clean_code
 
 
@@ -15,3 +16,4 @@ class CleanCodeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

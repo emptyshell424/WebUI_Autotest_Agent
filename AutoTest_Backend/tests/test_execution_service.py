@@ -1,5 +1,6 @@
 import unittest
 
+import tests._bootstrap
 from app.services.execution_service import validate_generated_code
 
 
@@ -24,3 +25,4 @@ class ExecutionSafetyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

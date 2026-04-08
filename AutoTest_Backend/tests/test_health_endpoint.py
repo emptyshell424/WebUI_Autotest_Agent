@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 import shutil
 
+import tests._bootstrap
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
@@ -49,3 +50,4 @@ class HealthEndpointTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
