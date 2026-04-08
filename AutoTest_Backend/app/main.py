@@ -1,82 +1,46 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from app.services.llm_service import llm
-from app.services.rag_service import rag
-from app.utils.code_parser import clean_code      # 导入清洗工具
-from app.services.executor_service import executor # 导入执行器
+from fastapi.responses import JSONResponse
+
+from app.api.router import api_router
+from app.core.config import Settings, get_settings
+from app.core.container import create_container
+from app.core.exceptions import AppError
 
 
+def create_app(settings: Settings | None = None) -> FastAPI:
+    active_settings = settings or get_settings()
+    app = FastAPI(title=active_settings.APP_NAME)
+    app.state.settings = active_settings
 
-app = FastAPI(title = "Web UI AutoTest")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=active_settings.FRONTEND_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-origins = [
-    "http://localhost:5173",    # Vite 默认端口
-    "http://127.0.0.1:5173",    # 有时候浏览器会用 IP 访问
-]
+    @app.exception_handler(AppError)
+    async def handle_app_error(_: Request, exc: AppError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "status": "error",
+                "code": exc.code,
+                "message": exc.message,
+                "details": exc.details,
+            },
+        )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,      # <--- 替换掉 ["*"]
-    allow_credentials=True,
-    allow_methods=["*"],        # 允许所有方法 (POST, GET, PUT...)
-    allow_headers=["*"],        # 允许所有 Header
-)
+    app.include_router(api_router, prefix=active_settings.API_V1_PREFIX)
+    return app
 
 
-#  1. 定义请求的数据结构 (Schema)
-class ChatRequest(BaseModel):
-    prompt: str
-    run: bool = False
-
-# 2. 编写接口
-@app.post("/api/debug/chat")
-async def debug_chat(request: ChatRequest):
-    # 1. RAG 检索
-    context = rag.search(request.prompt)
-    
-    # 2. 组装 Prompt
-    augmented_prompt = f"""
-    【背景知识】
-    {context}
-    
-    【用户需求】
-    {request.prompt}
-    
-    请编写完整的 Python Selenium 代码。
-    要求：
-    1. 使用 webdriver.Chrome()。
-    2. 执行完操作后，打印 "Test Completed"。
-    3. 不要使用 Markdown 格式。
-    """
-    
-    # 3. LLM 生成
-    raw_response = llm.chat(augmented_prompt)
-    
-    # === 新增逻辑开始 ===
-    
-    # 4. 清洗代码
-    cleaned_code = clean_code(raw_response)
-    
-    execution_result = None
-    if request.run:
-        print("⚡️ 用户要求立即运行代码...")
-        execution_result = executor.run_code(cleaned_code)
-    
-    # === 新增逻辑结束 ===
-
-    return {
-        "status": "success",
-        "rag_context": context,
-        "raw_output": raw_response,
-        "cleaned_code": cleaned_code, # 返回清洗后的代码给前端看
-        "execution_result": execution_result # 返回运行结果
-    }
+app = create_app()
 
 
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=False)
-
-    
