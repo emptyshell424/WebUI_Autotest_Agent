@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="view-grid workbench-grid">
     <section class="surface-panel">
       <div class="summary-strip">
@@ -38,6 +38,15 @@
 
         <div class="prompt-actions">
           <el-switch v-model="autoExecute" inline-prompt :active-text="t('workbench.autoRun')" :inactive-text="t('workbench.generateOnly')" />
+          <el-radio-group v-model="selectedRetrievalMode" class="mode-radio-group">
+            <el-radio-button
+              v-for="mode in retrievalModeOptions"
+              :key="mode.value"
+              :label="mode.value"
+            >
+              {{ mode.label }}
+            </el-radio-button>
+          </el-radio-group>
           <el-button type="primary" :icon="MagicStick" :loading="generating" @click="handleGenerate">
             {{ t('workbench.generateScript') }}
           </el-button>
@@ -47,6 +56,11 @@
           <el-button text :icon="RefreshRight" @click="refreshCurrentExecution" :disabled="!currentExecution">
             {{ t('workbench.refreshExecution') }}
           </el-button>
+        </div>
+
+        <div class="inline-meta">
+          <span>{{ t('workbench.selectedRetrievalMode') }}: {{ selectedRetrievalModeLabel }}</span>
+          <span>{{ t('workbench.activeRetrievalMode') }}: {{ activeRetrievalModeLabel }}</span>
         </div>
 
         <el-alert
@@ -71,6 +85,14 @@
           :description="currentCase.rag_context"
           show-icon
         />
+
+        <div v-if="currentCase" class="detail-block">
+          <p class="eyebrow">{{ t('workbench.strategyAudit') }}</p>
+          <div class="inline-meta">
+            <span>{{ t('common.requestedStrategy') }}: {{ formatStrategy(currentCase.requested_strategy) }}</span>
+            <span>{{ t('common.effectiveStrategy') }}: {{ formatStrategy(currentCase.effective_strategy) }}</span>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -119,6 +141,16 @@
             <span>{{ t('workbench.healing') }}: {{ currentExecution.self_heal_triggered ? t('workbench.repairAttemptsCount', { count: currentExecution.self_heal_count }) : t('common.notTriggered') }}</span>
           </div>
 
+          <div class="detail-block">
+            <p class="eyebrow">{{ t('workbench.executionAudit') }}</p>
+            <div class="inline-meta">
+              <span>{{ t('common.requestedStrategy') }}: {{ formatStrategy(currentExecution.requested_strategy) }}</span>
+              <span>{{ t('common.effectiveStrategy') }}: {{ formatStrategy(currentExecution.effective_strategy) }}</span>
+              <span>{{ t('common.siteProfile') }}: {{ formatSiteProfile(currentExecution.site_profile) }}</span>
+              <span>{{ t('common.fallbackReason') }}: {{ formatFallbackReason(currentExecution.fallback_reason) }}</span>
+            </div>
+          </div>
+
           <div v-if="currentExecution.validation_errors?.length" class="inline-list">
             <el-tag
               v-for="issue in currentExecution.validation_errors"
@@ -128,6 +160,11 @@
             >
               {{ issue }}
             </el-tag>
+          </div>
+
+          <div v-if="initialFailureReason" class="detail-block">
+            <p class="eyebrow">{{ t('workbench.initialFailureReason') }}</p>
+            <pre class="mono-pane --light">{{ initialFailureReason }}</pre>
           </div>
 
           <pre class="mono-pane">{{ executionOutput }}</pre>
@@ -151,6 +188,12 @@
                   <h4>{{ attempt.status }}</h4>
                 </div>
                 <span class="status-badge" :data-state="attempt.status">{{ attempt.status }}</span>
+              </div>
+              <div class="inline-meta">
+                <span>{{ t('common.strategyBefore') }}: {{ formatStrategy(attempt.strategy_before) }}</span>
+                <span>{{ t('common.strategyAfter') }}: {{ formatStrategy(attempt.strategy_after) }}</span>
+                <span>{{ t('common.siteProfile') }}: {{ formatSiteProfile(attempt.site_profile) }}</span>
+                <span>{{ t('common.fallbackReason') }}: {{ formatFallbackReason(attempt.fallback_reason) }}</span>
               </div>
               <p class="section-hint">{{ attempt.repair_summary || t('common.noRepairSummary') }}</p>
               <pre class="mono-pane --light">{{ attempt.repaired_code || t('common.noRepairedCode') }}</pre>
@@ -184,6 +227,7 @@ const {
   currentExecution,
   currentStatus,
   editedCode,
+  activeRetrievalMode,
   generating,
   knowledgeSources,
   lastError,
@@ -192,6 +236,27 @@ const {
   ragResultCount,
   running,
 } = storeToRefs(workspaceStore)
+
+const selectedRetrievalMode = computed({
+  get: () => workspaceStore.retrievalMode,
+  set: (value) => {
+    workspaceStore.retrievalMode = value
+  },
+})
+
+const retrievalModeOptions = computed(() => [
+  { value: 'vector', label: t('common.retrievalModeLabels.vector') },
+  { value: 'hybrid', label: t('common.retrievalModeLabels.hybrid') },
+  { value: 'hybrid_rerank', label: t('common.retrievalModeLabels.hybrid_rerank') },
+])
+
+const selectedRetrievalModeLabel = computed(() => {
+  return t(`common.retrievalModeLabels.${selectedRetrievalMode.value || 'hybrid_rerank'}`)
+})
+
+const activeRetrievalModeLabel = computed(() => {
+  return t(`common.retrievalModeLabels.${activeRetrievalMode.value || 'hybrid_rerank'}`)
+})
 
 const statusLabel = computed(() => {
   return t(`workbench.status.${currentStatus.value}`)
@@ -216,9 +281,32 @@ const executionOutput = computed(() => {
   return ['[STDOUT]', logs, '', '[STDERR]', error].join('\n')
 })
 
+const initialFailureReason = computed(() => {
+  if (!currentExecution.value) {
+    return ''
+  }
+  return (
+    currentExecution.value.self_heal_attempts?.[0]?.failure_reason ||
+    currentExecution.value.error ||
+    ''
+  )
+})
+
+const formatStrategy = (value) => {
+  return t(`common.strategyLabels.${value || 'interaction_first'}`)
+}
+
+const formatSiteProfile = (value) => {
+  return t(`common.siteProfileLabels.${value || 'generic'}`)
+}
+
+const formatFallbackReason = (value) => {
+  return t(`common.fallbackReasonLabels.${value || 'none'}`)
+}
+
 const handleGenerate = async () => {
   try {
-    await workspaceStore.generateCase()
+    await workspaceStore.generateCase(selectedRetrievalMode.value)
     ElMessage.success(
       autoExecute.value ? t('workbench.generatedAndStarted') : t('workbench.generated')
     )
@@ -246,3 +334,10 @@ const refreshCurrentExecution = async () => {
   }
 }
 </script>
+
+<style scoped>
+.mode-radio-group {
+  flex-wrap: wrap;
+}
+</style>
+

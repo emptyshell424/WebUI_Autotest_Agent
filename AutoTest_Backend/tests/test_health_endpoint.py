@@ -1,12 +1,15 @@
+﻿import shutil
 import unittest
 from pathlib import Path
-import shutil
 
-import tests._bootstrap
+from . import _bootstrap
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
+from app.core.database import initialize_database
 from app.main import create_app
+from app.repositories import TestCaseRepository
+from app.services.strategy_service import StrategyService
 
 
 class HealthEndpointTests(unittest.TestCase):
@@ -26,6 +29,7 @@ class HealthEndpointTests(unittest.TestCase):
             KNOWLEDGE_BASE_DIR=str(root / "docs" / "knowledge"),
             EXECUTIONS_DIR=str(root / "runs"),
         )
+        initialize_database(self.settings)
         self.client = TestClient(create_app(self.settings))
 
     def tearDown(self) -> None:
@@ -47,7 +51,27 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertEqual(payload["document_count"], 1)
         self.assertGreaterEqual(payload["chunk_count"], 1)
 
+    def test_test_case_endpoint_returns_saved_case(self) -> None:
+        prompt = "Open Baidu, search for DeepSeek, then wait for the results page."
+        strategy = StrategyService().analyze_generation(prompt)
+        record = TestCaseRepository(self.settings).create(
+            title="baidu search",
+            prompt=prompt,
+            generated_code="print('Test Completed')",
+            raw_output="print('Test Completed')",
+            rag_context="Use explicit waits.",
+            requested_strategy=strategy.requested_strategy,
+            effective_strategy=strategy.effective_strategy,
+        )
+
+        response = self.client.get(f"/api/v1/test-cases/{record.id}")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["id"], record.id)
+        self.assertEqual(payload["prompt"], prompt)
+        self.assertEqual(payload["requested_strategy"], strategy.requested_strategy)
+        self.assertEqual(payload["effective_strategy"], strategy.effective_strategy)
+
 
 if __name__ == "__main__":
     unittest.main()
-

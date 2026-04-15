@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 class GenerateRequest(BaseModel):
     prompt: str = Field(min_length=5)
+    retrieval_mode: str | None = Field(default=None)
 
 
 class TestCaseRead(BaseModel):
@@ -14,6 +15,8 @@ class TestCaseRead(BaseModel):
     rag_context: str
     status: str
     created_at: str
+    requested_strategy: str
+    effective_strategy: str
 
 
 class GenerateResponse(BaseModel):
@@ -21,3 +24,4 @@ class GenerateResponse(BaseModel):
     case: TestCaseRead
     knowledge_sources: list[str]
     rag_result_count: int
+    retrieval_mode: str

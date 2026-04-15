@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="view-grid history-grid">
     <section class="surface-panel">
       <div class="section-title">
@@ -29,7 +29,12 @@
               <span class="status-badge" :data-state="row.status">{{ classifyOutcome(row) }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="test_case_title" :label="t('history.scenario')" min-width="240" />
+          <el-table-column prop="test_case_title" :label="t('history.scenario')" min-width="220" />
+          <el-table-column :label="t('history.strategy')" min-width="170">
+            <template #default="{ row }">
+              {{ formatStrategy(row.effective_strategy) }}
+            </template>
+          </el-table-column>
           <el-table-column prop="self_heal_count" :label="t('history.repairs')" width="100" />
           <el-table-column prop="created_at" :label="t('history.createdAt')" min-width="220" />
           <el-table-column prop="finished_at" :label="t('history.finishedAt')" min-width="220" />
@@ -51,13 +56,23 @@
         <el-button text @click="openInWorkbench" :disabled="!currentExecution">{{ t('history.openInWorkbench') }}</el-button>
       </div>
 
-        <div v-if="currentExecution" class="stack-rows">
+      <div v-if="currentExecution" class="stack-rows">
+        <div class="inline-meta">
+          <span>{{ t('workbench.execution') }}: {{ currentExecution.id }}</span>
+          <span>{{ t('history.case') }}: {{ currentExecution.test_case_id }}</span>
+          <span>{{ t('history.status') }}: {{ formatStatus(currentExecution.status) }}</span>
+          <span>{{ t('history.repairs') }}: {{ currentExecution.self_heal_count || 0 }}</span>
+        </div>
+
+        <div class="detail-block">
+          <p class="eyebrow">{{ t('history.strategyAudit') }}</p>
           <div class="inline-meta">
-            <span>{{ t('workbench.execution') }}: {{ currentExecution.id }}</span>
-            <span>{{ t('history.case') }}: {{ currentExecution.test_case_id }}</span>
-            <span>{{ t('history.status') }}: {{ formatStatus(currentExecution.status) }}</span>
-            <span>{{ t('history.repairs') }}: {{ currentExecution.self_heal_count || 0 }}</span>
+            <span>{{ t('common.requestedStrategy') }}: {{ formatStrategy(currentExecution.requested_strategy) }}</span>
+            <span>{{ t('common.effectiveStrategy') }}: {{ formatStrategy(currentExecution.effective_strategy) }}</span>
+            <span>{{ t('common.siteProfile') }}: {{ formatSiteProfile(currentExecution.site_profile) }}</span>
+            <span>{{ t('common.fallbackReason') }}: {{ formatFallbackReason(currentExecution.fallback_reason) }}</span>
           </div>
+        </div>
 
         <div v-if="currentExecution.validation_errors?.length" class="inline-list">
           <el-tag
@@ -68,6 +83,11 @@
           >
             {{ issue }}
           </el-tag>
+        </div>
+
+        <div v-if="initialFailureReason" class="detail-block">
+          <p class="eyebrow">{{ t('history.initialFailureReason') }}</p>
+          <pre class="mono-pane --light">{{ initialFailureReason }}</pre>
         </div>
 
         <div class="split-column">
@@ -93,6 +113,12 @@
                 <h4>{{ formatStatus(attempt.status) }}</h4>
               </div>
               <span class="status-badge" :data-state="attempt.status">{{ formatStatus(attempt.status) }}</span>
+            </div>
+            <div class="inline-meta">
+              <span>{{ t('common.strategyBefore') }}: {{ formatStrategy(attempt.strategy_before) }}</span>
+              <span>{{ t('common.strategyAfter') }}: {{ formatStrategy(attempt.strategy_after) }}</span>
+              <span>{{ t('common.siteProfile') }}: {{ formatSiteProfile(attempt.site_profile) }}</span>
+              <span>{{ t('common.fallbackReason') }}: {{ formatFallbackReason(attempt.fallback_reason) }}</span>
             </div>
             <p class="section-hint">{{ attempt.repair_summary || attempt.failure_reason || t('common.noRepairSummary') }}</p>
             <pre class="mono-pane --light">{{ attempt.repaired_code || t('common.noRepairedCode') }}</pre>
@@ -133,8 +159,31 @@ const historyOutput = computed(() => {
   ].join('\n')
 })
 
+const initialFailureReason = computed(() => {
+  if (!currentExecution.value) {
+    return ''
+  }
+  return (
+    currentExecution.value.self_heal_attempts?.[0]?.failure_reason ||
+    currentExecution.value.error ||
+    ''
+  )
+})
+
 const formatStatus = (status) => {
   return t(`workbench.status.${status}`)
+}
+
+const formatStrategy = (value) => {
+  return t(`common.strategyLabels.${value || 'interaction_first'}`)
+}
+
+const formatSiteProfile = (value) => {
+  return t(`common.siteProfileLabels.${value || 'generic'}`)
+}
+
+const formatFallbackReason = (value) => {
+  return t(`common.fallbackReasonLabels.${value || 'none'}`)
 }
 
 const classifyOutcome = (row) => {
@@ -181,3 +230,4 @@ onMounted(async () => {
   }
 })
 </script>
+

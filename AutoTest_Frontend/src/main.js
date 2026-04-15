@@ -1,7 +1,37 @@
-import { createApp } from 'vue'
+﻿import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
+import {
+  ElAlert,
+  ElButton,
+  ElEmpty,
+  ElIcon,
+  ElInput,
+  ElMenu,
+  ElMenuItem,
+  ElRadioButton,
+  ElRadioGroup,
+  ElSegmented,
+  ElSwitch,
+  ElTable,
+  ElTableColumn,
+  ElTag,
+} from 'element-plus'
+
+import 'element-plus/es/components/alert/style/css'
+import 'element-plus/es/components/button/style/css'
+import 'element-plus/es/components/empty/style/css'
+import 'element-plus/es/components/icon/style/css'
+import 'element-plus/es/components/input/style/css'
+import 'element-plus/es/components/menu/style/css'
+import 'element-plus/es/components/menu-item/style/css'
+import 'element-plus/es/components/message/style/css'
+import 'element-plus/es/components/radio-button/style/css'
+import 'element-plus/es/components/radio-group/style/css'
+import 'element-plus/es/components/segmented/style/css'
+import 'element-plus/es/components/switch/style/css'
+import 'element-plus/es/components/table/style/css'
+import 'element-plus/es/components/table-column/style/css'
+import 'element-plus/es/components/tag/style/css'
 
 import App from './App.vue'
 import router from './router'
@@ -11,5 +41,24 @@ const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)
-app.use(ElementPlus)
+
+;[
+  ElAlert,
+  ElButton,
+  ElEmpty,
+  ElIcon,
+  ElInput,
+  ElMenu,
+  ElMenuItem,
+  ElRadioButton,
+  ElRadioGroup,
+  ElSegmented,
+  ElSwitch,
+  ElTable,
+  ElTableColumn,
+  ElTag,
+].forEach((component) => {
+  app.component(component.name, component)
+})
+
 app.mount('#app')

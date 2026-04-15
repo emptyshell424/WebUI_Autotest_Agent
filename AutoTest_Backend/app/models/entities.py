@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 
 
 @dataclass(slots=True)
@@ -11,6 +11,8 @@ class TestCaseRecord:
     rag_context: str
     status: str
     created_at: str
+    requested_strategy: str
+    effective_strategy: str
 
 
 @dataclass(slots=True)
@@ -27,6 +29,10 @@ class ExecutionRecord:
     created_at: str
     started_at: str | None
     finished_at: str | None
+    requested_strategy: str
+    effective_strategy: str
+    fallback_reason: str | None
+    site_profile: str | None
     test_case_title: str | None = None
     self_heal_triggered: bool = False
     self_heal_count: int = 0
@@ -52,6 +58,10 @@ class SelfHealAttemptRecord:
     created_at: str
     started_at: str | None
     finished_at: str | None
+    strategy_before: str
+    strategy_after: str
+    fallback_reason: str | None
+    site_profile: str | None
 
 
 @dataclass(slots=True)

@@ -21,7 +21,7 @@ export const getStoredApiBaseUrl = () => {
 }
 
 export const setApiBaseUrl = (baseUrl) => {
-  const normalized = normalizeBaseUrl(baseUrl)
+  const normalized = normalizeBaseUrl(baseUrl) || DEFAULT_API_BASE_URL
   apiClient.defaults.baseURL = normalized
   if (hasWindow) {
     window.localStorage.setItem(STORAGE_KEY, normalized)

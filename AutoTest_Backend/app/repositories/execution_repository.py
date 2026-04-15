@@ -5,12 +5,29 @@ from app.core.config import Settings
 from app.core.database import get_connection, utc_now_iso
 from app.models import ExecutionRecord, SelfHealAttemptRecord
 
+TERMINAL_EXECUTION_STATUSES = (
+    'completed',
+    'failed',
+    'healed_completed',
+    'healed_failed',
+)
+SELF_HEAL_TERMINAL_STATUSES = ('healed_completed', 'healed_failed')
+
 
 class ExecutionRepository:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def create(self, *, test_case_id: str, executed_code: str) -> ExecutionRecord:
+    def create(
+        self,
+        *,
+        test_case_id: str,
+        executed_code: str,
+        requested_strategy: str,
+        effective_strategy: str,
+        fallback_reason: str | None = None,
+        site_profile: str | None = None,
+    ) -> ExecutionRecord:
         record = ExecutionRecord(
             id=str(uuid.uuid4()),
             test_case_id=test_case_id,
@@ -24,14 +41,19 @@ class ExecutionRepository:
             created_at=utc_now_iso(),
             started_at=None,
             finished_at=None,
+            requested_strategy=requested_strategy,
+            effective_strategy=effective_strategy,
+            fallback_reason=fallback_reason,
+            site_profile=site_profile,
         )
         with get_connection(self.settings) as connection:
             connection.execute(
                 """
                 INSERT INTO execution_record (
                     id, test_case_id, executed_code, status, run_directory, script_path,
-                    logs, error, validation_errors, created_at, started_at, finished_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    logs, error, validation_errors, created_at, started_at, finished_at,
+                    requested_strategy, effective_strategy, fallback_reason, site_profile
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.id,
@@ -46,6 +68,10 @@ class ExecutionRepository:
                     record.created_at,
                     record.started_at,
                     record.finished_at,
+                    record.requested_strategy,
+                    record.effective_strategy,
+                    record.fallback_reason,
+                    record.site_profile,
                 ),
             )
         return record
@@ -67,6 +93,10 @@ class ExecutionRepository:
                     e.created_at,
                     e.started_at,
                     e.finished_at,
+                    e.requested_strategy,
+                    e.effective_strategy,
+                    e.fallback_reason,
+                    e.site_profile,
                     t.title AS test_case_title,
                     COALESCE(stats.self_heal_count, 0) AS self_heal_count
                 FROM execution_record AS e
@@ -106,6 +136,10 @@ class ExecutionRepository:
                     e.created_at,
                     e.started_at,
                     e.finished_at,
+                    e.requested_strategy,
+                    e.effective_strategy,
+                    e.fallback_reason,
+                    e.site_profile,
                     t.title AS test_case_title,
                     COALESCE(stats.self_heal_count, 0) AS self_heal_count
                 FROM execution_record AS e
@@ -149,6 +183,9 @@ class ExecutionRepository:
         validation_errors: list[str] | None = None,
         run_directory: str | None = None,
         script_path: str | None = None,
+        effective_strategy: str | None = None,
+        fallback_reason: str | None = None,
+        site_profile: str | None = None,
     ) -> None:
         with get_connection(self.settings) as connection:
             connection.execute(
@@ -160,6 +197,9 @@ class ExecutionRepository:
                     validation_errors = ?,
                     run_directory = COALESCE(?, run_directory),
                     script_path = COALESCE(?, script_path),
+                    effective_strategy = COALESCE(?, effective_strategy),
+                    fallback_reason = COALESCE(?, fallback_reason),
+                    site_profile = COALESCE(?, site_profile),
                     finished_at = ?
                 WHERE id = ?
                 """,
@@ -170,6 +210,9 @@ class ExecutionRepository:
                     json.dumps(validation_errors or []),
                     run_directory,
                     script_path,
+                    effective_strategy,
+                    fallback_reason,
+                    site_profile,
                     utc_now_iso(),
                     execution_id,
                 ),
@@ -183,6 +226,10 @@ class ExecutionRepository:
         failure_reason: str | None,
         repair_summary: str | None,
         original_code: str,
+        strategy_before: str,
+        strategy_after: str,
+        fallback_reason: str | None,
+        site_profile: str | None,
     ) -> SelfHealAttemptRecord:
         record = SelfHealAttemptRecord(
             id=str(uuid.uuid4()),
@@ -201,6 +248,10 @@ class ExecutionRepository:
             created_at=utc_now_iso(),
             started_at=None,
             finished_at=None,
+            strategy_before=strategy_before,
+            strategy_after=strategy_after,
+            fallback_reason=fallback_reason,
+            site_profile=site_profile,
         )
         with get_connection(self.settings) as connection:
             connection.execute(
@@ -208,8 +259,9 @@ class ExecutionRepository:
                 INSERT INTO self_heal_attempt (
                     id, execution_id, attempt_number, status, failure_reason, repair_summary,
                     original_code, repaired_code, logs, error, validation_errors, run_directory,
-                    script_path, created_at, started_at, finished_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    script_path, created_at, started_at, finished_at,
+                    strategy_before, strategy_after, fallback_reason, site_profile
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.id,
@@ -228,6 +280,10 @@ class ExecutionRepository:
                     record.created_at,
                     record.started_at,
                     record.finished_at,
+                    record.strategy_before,
+                    record.strategy_after,
+                    record.fallback_reason,
+                    record.site_profile,
                 ),
             )
         return record
@@ -326,7 +382,11 @@ class ExecutionRepository:
                     script_path,
                     created_at,
                     started_at,
-                    finished_at
+                    finished_at,
+                    strategy_before,
+                    strategy_after,
+                    fallback_reason,
+                    site_profile
                 FROM self_heal_attempt
                 WHERE execution_id = ?
                 ORDER BY attempt_number ASC
@@ -340,13 +400,23 @@ class ExecutionRepository:
             generated_count = connection.execute("SELECT COUNT(*) FROM test_case").fetchone()[0]
             execution_count = connection.execute("SELECT COUNT(*) FROM execution_record").fetchone()[0]
             effective_execution_count = connection.execute(
-                "SELECT COUNT(*) FROM execution_record WHERE status != 'blocked'"
+                """
+                SELECT COUNT(*)
+                FROM execution_record
+                WHERE status IN (?, ?, ?, ?)
+                """,
+                TERMINAL_EXECUTION_STATUSES,
             ).fetchone()[0]
             first_pass_success_count = connection.execute(
                 "SELECT COUNT(*) FROM execution_record WHERE status = 'completed'"
             ).fetchone()[0]
             self_heal_triggered_count = connection.execute(
-                "SELECT COUNT(DISTINCT execution_id) FROM self_heal_attempt"
+                """
+                SELECT COUNT(*)
+                FROM execution_record
+                WHERE status IN (?, ?)
+                """,
+                SELF_HEAL_TERMINAL_STATUSES,
             ).fetchone()[0]
             self_heal_success_count = connection.execute(
                 "SELECT COUNT(*) FROM execution_record WHERE status = 'healed_completed'"
@@ -392,3 +462,4 @@ class ExecutionRepository:
         if denominator <= 0:
             return 0.0
         return round(numerator / denominator, 4)
+

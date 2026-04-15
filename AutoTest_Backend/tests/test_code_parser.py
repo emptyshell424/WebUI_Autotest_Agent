@@ -1,6 +1,6 @@
 import unittest
 
-import tests._bootstrap
+from . import _bootstrap
 from app.utils.code_parser import clean_code
 
 
@@ -13,7 +13,10 @@ class CleanCodeTests(unittest.TestCase):
         raw = "```\nprint('fallback')\n```"
         self.assertEqual(clean_code(raw), "print('fallback')")
 
+    def test_extracts_py_fence(self) -> None:
+        raw = "```py\nprint('short')\n```"
+        self.assertEqual(clean_code(raw), "print('short')")
+
 
 if __name__ == "__main__":
     unittest.main()
-

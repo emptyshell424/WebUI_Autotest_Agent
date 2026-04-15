@@ -1,11 +1,17 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 
 from fastapi import Request
 
 from app.core.config import Settings, get_settings
 from app.core.database import initialize_database
 from app.repositories import ExecutionRepository, SettingsRepository, TestCaseRepository
-from app.services import ExecutionService, GenerationService, LLMService, RAGService
+from app.services import (
+    ExecutionService,
+    GenerationService,
+    LLMService,
+    RAGService,
+    StrategyService,
+)
 
 
 @dataclass(slots=True)
@@ -16,6 +22,7 @@ class ServiceContainer:
     system_settings: SettingsRepository
     llm: LLMService
     rag: RAGService
+    strategy: StrategyService
     generation: GenerationService
     execution_service: ExecutionService
 
@@ -29,8 +36,9 @@ def create_container(settings: Settings | None = None) -> ServiceContainer:
     system_settings = SettingsRepository(active_settings)
     rag = RAGService(active_settings)
     llm = LLMService(active_settings)
-    generation = GenerationService(llm, rag, test_cases)
-    execution_service = ExecutionService(active_settings, executions, test_cases, llm)
+    strategy = StrategyService()
+    generation = GenerationService(llm, rag, test_cases, strategy)
+    execution_service = ExecutionService(active_settings, executions, test_cases, llm, strategy)
 
     system_settings.upsert_many(
         {
@@ -48,6 +56,7 @@ def create_container(settings: Settings | None = None) -> ServiceContainer:
         system_settings=system_settings,
         llm=llm,
         rag=rag,
+        strategy=strategy,
         generation=generation,
         execution_service=execution_service,
     )

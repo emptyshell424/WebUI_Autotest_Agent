@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 
 from app.core.config import Settings
 from app.core.database import get_connection, utc_now_iso
@@ -17,6 +17,8 @@ class TestCaseRepository:
         generated_code: str,
         raw_output: str,
         rag_context: str,
+        requested_strategy: str,
+        effective_strategy: str,
         status: str = "generated",
     ) -> TestCaseRecord:
         record = TestCaseRecord(
@@ -28,13 +30,16 @@ class TestCaseRepository:
             rag_context=rag_context,
             status=status,
             created_at=utc_now_iso(),
+            requested_strategy=requested_strategy,
+            effective_strategy=effective_strategy,
         )
         with get_connection(self.settings) as connection:
             connection.execute(
                 """
                 INSERT INTO test_case (
-                    id, title, prompt, generated_code, raw_output, rag_context, status, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    id, title, prompt, generated_code, raw_output, rag_context, status,
+                    created_at, requested_strategy, effective_strategy
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.id,
@@ -45,6 +50,8 @@ class TestCaseRepository:
                     record.rag_context,
                     record.status,
                     record.created_at,
+                    record.requested_strategy,
+                    record.effective_strategy,
                 ),
             )
         return record
@@ -53,7 +60,17 @@ class TestCaseRepository:
         with get_connection(self.settings) as connection:
             row = connection.execute(
                 """
-                SELECT id, title, prompt, generated_code, raw_output, rag_context, status, created_at
+                SELECT
+                    id,
+                    title,
+                    prompt,
+                    generated_code,
+                    raw_output,
+                    rag_context,
+                    status,
+                    created_at,
+                    requested_strategy,
+                    effective_strategy
                 FROM test_case
                 WHERE id = ?
                 """,

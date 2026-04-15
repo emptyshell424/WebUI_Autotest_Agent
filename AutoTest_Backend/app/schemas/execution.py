@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+﻿from pydantic import BaseModel, Field
 
 
 class ExecutionCreateRequest(BaseModel):
@@ -17,12 +17,16 @@ class SelfHealAttemptRead(BaseModel):
     repaired_code: str | None = None
     logs: str | None = None
     error: str | None = None
-    validation_errors: list[str] = []
+    validation_errors: list[str] = Field(default_factory=list)
     run_directory: str | None = None
     script_path: str | None = None
     created_at: str
     started_at: str | None = None
     finished_at: str | None = None
+    strategy_before: str
+    strategy_after: str
+    fallback_reason: str | None = None
+    site_profile: str | None = None
 
 
 class ExecutionRead(BaseModel):
@@ -35,14 +39,18 @@ class ExecutionRead(BaseModel):
     script_path: str | None = None
     logs: str | None = None
     error: str | None = None
-    validation_errors: list[str] = []
+    validation_errors: list[str] = Field(default_factory=list)
     created_at: str
     started_at: str | None = None
     finished_at: str | None = None
+    requested_strategy: str
+    effective_strategy: str
+    fallback_reason: str | None = None
+    site_profile: str | None = None
     self_heal_triggered: bool = False
     self_heal_count: int = 0
     healed: bool = False
-    self_heal_attempts: list[SelfHealAttemptRead] = []
+    self_heal_attempts: list[SelfHealAttemptRead] = Field(default_factory=list)
 
 
 class ExecutionListResponse(BaseModel):

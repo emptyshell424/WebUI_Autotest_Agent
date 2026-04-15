@@ -10,6 +10,7 @@ from app.core.config import Settings
 from app.core.exceptions import AppError
 from app.repositories import ExecutionRepository, TestCaseRepository
 from app.services.llm_service import LLMService
+from app.services.strategy_service import StrategyService
 from app.utils.code_parser import clean_code
 
 
@@ -21,6 +22,7 @@ SAFE_IMPORTS = {
     "re",
     "selenium",
     "time",
+    "urllib",
 }
 BLOCKED_CALLS = {"breakpoint", "compile", "eval", "exec", "input", "open", "__import__"}
 BLOCKED_PREFIXES = ("os.", "pathlib.", "shutil.", "socket.", "subprocess.", "sys.")
@@ -82,11 +84,13 @@ class ExecutionService:
         execution_repository: ExecutionRepository,
         test_case_repository: TestCaseRepository,
         llm_service: LLMService,
+        strategy_service: StrategyService,
     ) -> None:
         self.settings = settings
         self.execution_repository = execution_repository
         self.test_case_repository = test_case_repository
         self.llm_service = llm_service
+        self.strategy_service = strategy_service
 
     def create_execution(self, *, test_case_id: str, code_override: str | None = None):
         test_case = self.test_case_repository.get(test_case_id)
@@ -97,10 +101,20 @@ class ExecutionService:
                 code="test_case_not_found",
             )
 
+        strategy_context = self.strategy_service.analyze_generation(test_case.prompt)
         executed_code = (code_override or test_case.generated_code).strip()
+        if not executed_code:
+            raise AppError(
+                'Execution code is empty.',
+                status_code=422,
+                code='empty_execution_code',
+            )
         record = self.execution_repository.create(
             test_case_id=test_case_id,
             executed_code=executed_code,
+            requested_strategy=test_case.requested_strategy,
+            effective_strategy=test_case.effective_strategy,
+            site_profile=strategy_context.site_profile,
         )
         self.test_case_repository.update_status(test_case_id, "queued")
 
@@ -155,6 +169,8 @@ class ExecutionService:
                 validation_errors=primary_result.validation_errors,
                 run_directory=primary_result.run_directory,
                 script_path=primary_result.script_path,
+                effective_strategy=record.effective_strategy,
+                site_profile=record.site_profile,
             )
             self.test_case_repository.update_status(record.test_case_id, "blocked")
             return
@@ -167,6 +183,8 @@ class ExecutionService:
                 error=primary_result.error,
                 run_directory=primary_result.run_directory,
                 script_path=primary_result.script_path,
+                effective_strategy=record.effective_strategy,
+                site_profile=record.site_profile,
             )
             self.test_case_repository.update_status(record.test_case_id, "completed")
             return
@@ -177,6 +195,9 @@ class ExecutionService:
             rag_context=test_case.rag_context,
             original_code=record.executed_code,
             primary_result=primary_result,
+            requested_strategy=record.requested_strategy,
+            effective_strategy=record.effective_strategy,
+            site_profile=record.site_profile,
         )
         self.test_case_repository.update_status(record.test_case_id, final_status)
 
@@ -188,6 +209,9 @@ class ExecutionService:
         rag_context: str,
         original_code: str,
         primary_result: ScriptRunResult,
+        requested_strategy: str,
+        effective_strategy: str,
+        site_profile: str | None,
     ) -> str:
         if self.settings.MAX_SELF_HEAL_ATTEMPTS <= 0:
             self.execution_repository.mark_finished(
@@ -197,84 +221,167 @@ class ExecutionService:
                 error=primary_result.error,
                 run_directory=primary_result.run_directory,
                 script_path=primary_result.script_path,
+                effective_strategy=effective_strategy,
+                site_profile=site_profile,
             )
             return "failed"
 
-        repair_summary = self._build_repair_summary(primary_result.error, primary_result.logs)
-        attempt = self.execution_repository.create_self_heal_attempt(
-            execution_id=execution_id,
-            attempt_number=1,
-            failure_reason=primary_result.error or primary_result.logs,
-            repair_summary=repair_summary,
-            original_code=original_code,
-        )
+        current_code = original_code
+        current_result = primary_result
+        current_strategy = effective_strategy
+        current_fallback_reason: str | None = None
+        current_site_profile = site_profile
 
-        try:
-            repaired_code = clean_code(
-                self.llm_service.repair_script(
-                    prompt=prompt,
-                    original_code=original_code,
-                    error=primary_result.error or "",
-                    logs=primary_result.logs,
-                    context=rag_context,
+        for attempt_number in range(1, self.settings.MAX_SELF_HEAL_ATTEMPTS + 1):
+            strategy_decision = self.strategy_service.analyze_repair(
+                prompt=prompt,
+                error=current_result.error,
+                original_code=current_code,
+                requested_strategy=requested_strategy,
+                effective_strategy=current_strategy,
+                site_profile=current_site_profile,
+            )
+            repair_summary = self.strategy_service.build_repair_summary(
+                strategy_decision
+            ) or self._build_generic_repair_summary(
+                current_result.error,
+                current_result.logs,
+            )
+            repair_guidance = self.strategy_service.build_repair_guidance(strategy_decision)
+            attempt = self.execution_repository.create_self_heal_attempt(
+                execution_id=execution_id,
+                attempt_number=attempt_number,
+                failure_reason=current_result.error or current_result.logs,
+                repair_summary=repair_summary,
+                original_code=current_code,
+                strategy_before=strategy_decision.strategy_before,
+                strategy_after=strategy_decision.strategy_after,
+                fallback_reason=strategy_decision.fallback_reason,
+                site_profile=strategy_decision.site_profile,
+            )
+
+            try:
+                repaired_code = clean_code(
+                    self.llm_service.repair_script(
+                        prompt=prompt,
+                        original_code=current_code,
+                        error=current_result.error or "",
+                        logs=current_result.logs,
+                        context=rag_context,
+                        strategy_decision=strategy_decision,
+                        repair_guidance=repair_guidance,
+                    )
+                ).strip()
+            except AppError as exc:
+                self.execution_repository.mark_self_heal_attempt_finished(
+                    attempt.id,
+                    status="repair_failed",
+                    repair_summary=repair_summary,
+                    logs=current_result.logs,
+                    error=exc.message,
                 )
-            ).strip()
-        except AppError as exc:
+                if attempt_number == self.settings.MAX_SELF_HEAL_ATTEMPTS:
+                    self.execution_repository.mark_finished(
+                        execution_id,
+                        status="healed_failed",
+                        logs=current_result.logs,
+                        error=exc.message,
+                        validation_errors=current_result.validation_errors,
+                        run_directory=current_result.run_directory,
+                        script_path=current_result.script_path,
+                        effective_strategy=current_strategy,
+                        fallback_reason=current_fallback_reason,
+                        site_profile=current_site_profile,
+                    )
+                    return "healed_failed"
+                continue
+
+            if not repaired_code:
+                repair_error = "Repair returned empty code after cleanup."
+                self.execution_repository.mark_self_heal_attempt_finished(
+                    attempt.id,
+                    status="repair_failed",
+                    repair_summary=repair_summary,
+                    logs=current_result.logs,
+                    error=repair_error,
+                )
+                if attempt_number == self.settings.MAX_SELF_HEAL_ATTEMPTS:
+                    self.execution_repository.mark_finished(
+                        execution_id,
+                        status="healed_failed",
+                        logs=current_result.logs,
+                        error=repair_error,
+                        validation_errors=current_result.validation_errors,
+                        run_directory=current_result.run_directory,
+                        script_path=current_result.script_path,
+                        effective_strategy=current_strategy,
+                        fallback_reason=current_fallback_reason,
+                        site_profile=current_site_profile,
+                    )
+                    return "healed_failed"
+                continue
+
+            repair_run_dir = self.settings.executions_dir / execution_id / f"repair-{attempt_number}"
+            repair_script_path = repair_run_dir / "generated_test.py"
+            self.execution_repository.mark_self_heal_attempt_running(
+                attempt.id,
+                repaired_code=repaired_code,
+                repair_summary=repair_summary,
+                run_directory=str(repair_run_dir),
+                script_path=str(repair_script_path),
+            )
+
+            repair_result = self._execute_script(
+                code=repaired_code,
+                run_directory=repair_run_dir,
+                status_callback=None,
+            )
             self.execution_repository.mark_self_heal_attempt_finished(
                 attempt.id,
-                status="repair_failed",
+                status=repair_result.status,
+                repaired_code=repaired_code,
                 repair_summary=repair_summary,
-                logs=primary_result.logs,
-                error=exc.message,
+                logs=repair_result.logs,
+                error=repair_result.error,
+                validation_errors=repair_result.validation_errors,
+                run_directory=repair_result.run_directory,
+                script_path=repair_result.script_path,
             )
-            self.execution_repository.mark_finished(
-                execution_id,
-                status="healed_failed",
-                logs=primary_result.logs,
-                error=primary_result.error or exc.message,
-                run_directory=primary_result.run_directory,
-                script_path=primary_result.script_path,
-            )
-            return "healed_failed"
 
-        repair_run_dir = self.settings.executions_dir / execution_id / "repair-1"
-        repair_script_path = repair_run_dir / "generated_test.py"
-        self.execution_repository.mark_self_heal_attempt_running(
-            attempt.id,
-            repaired_code=repaired_code,
-            repair_summary=repair_summary,
-            run_directory=str(repair_run_dir),
-            script_path=str(repair_script_path),
-        )
+            current_code = repaired_code
+            current_result = repair_result
+            current_strategy = strategy_decision.strategy_after
+            current_fallback_reason = strategy_decision.fallback_reason
+            current_site_profile = strategy_decision.site_profile
 
-        repair_result = self._execute_script(
-            code=repaired_code,
-            run_directory=repair_run_dir,
-            status_callback=None,
-        )
-        self.execution_repository.mark_self_heal_attempt_finished(
-            attempt.id,
-            status=repair_result.status,
-            repaired_code=repaired_code,
-            repair_summary=repair_summary,
-            logs=repair_result.logs,
-            error=repair_result.error,
-            validation_errors=repair_result.validation_errors,
-            run_directory=repair_result.run_directory,
-            script_path=repair_result.script_path,
-        )
+            if repair_result.status == "completed":
+                self.execution_repository.mark_finished(
+                    execution_id,
+                    status="healed_completed",
+                    logs=repair_result.logs,
+                    error=repair_result.error,
+                    validation_errors=repair_result.validation_errors,
+                    run_directory=repair_result.run_directory,
+                    script_path=repair_result.script_path,
+                    effective_strategy=current_strategy,
+                    fallback_reason=current_fallback_reason,
+                    site_profile=current_site_profile,
+                )
+                return "healed_completed"
 
-        final_status = "healed_completed" if repair_result.status == "completed" else "healed_failed"
         self.execution_repository.mark_finished(
             execution_id,
-            status=final_status,
-            logs=repair_result.logs,
-            error=repair_result.error,
-            validation_errors=repair_result.validation_errors,
-            run_directory=repair_result.run_directory,
-            script_path=repair_result.script_path,
+            status="healed_failed",
+            logs=current_result.logs,
+            error=current_result.error,
+            validation_errors=current_result.validation_errors,
+            run_directory=current_result.run_directory,
+            script_path=current_result.script_path,
+            effective_strategy=current_strategy,
+            fallback_reason=current_fallback_reason,
+            site_profile=current_site_profile,
         )
-        return final_status
+        return "healed_failed"
 
     def _execute_script(
         self,
@@ -363,7 +470,11 @@ class ExecutionService:
             return ""
         return path.read_text(encoding="utf-8").strip()
 
-    def _build_repair_summary(self, error: str | None, logs: str | None) -> str:
+    def _build_generic_repair_summary(
+        self,
+        error: str | None,
+        logs: str | None,
+    ) -> str:
         combined = f"{error or ''}\n{logs or ''}".lower()
         if "timeout" in combined:
             return "Adjusted waits and readiness checks after a timeout-related failure."
@@ -372,3 +483,4 @@ class ExecutionService:
         if "iframe" in combined or "frame" in combined:
             return "Retried with frame-aware Selenium interactions."
         return "Retried with a repaired Selenium script based on the recorded runtime failure."
+
