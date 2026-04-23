@@ -1,0 +1,19 @@
+# Runtime / temp
+.tmp/
+.npm-cache-test/
+
+# Codex local cache
+.codex-local/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Env
+.env

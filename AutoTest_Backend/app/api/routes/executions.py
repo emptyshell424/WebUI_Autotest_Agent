@@ -35,13 +35,27 @@ def list_executions(
     request: Request,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    status: str | None = Query(default=None),
 ) -> ExecutionListResponse:
     container = get_container(request)
     items = [
         ExecutionRead(**asdict(record))
-        for record in container.execution_service.list_executions(limit=limit, offset=offset)
+        for record in container.execution_service.list_executions(limit=limit, offset=offset, status=status)
     ]
-    return ExecutionListResponse(items=items, limit=limit, offset=offset)
+    return ExecutionListResponse(
+        items=items,
+        limit=limit,
+        offset=offset,
+        total=container.execution_service.count_executions(status=status),
+        status_filter=status,
+    )
+
+
+@router.delete("/{execution_id}", response_model=ExecutionRead)
+def cancel_execution(execution_id: str, request: Request) -> ExecutionRead:
+    container = get_container(request)
+    record = container.execution_service.cancel_execution(execution_id)
+    return ExecutionRead(**asdict(record))
 
 
 @router.get("/{execution_id}", response_model=ExecutionRead)

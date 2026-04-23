@@ -24,6 +24,21 @@
           <p class="section-hint">{{ card.label }}</p>
         </article>
       </div>
+      <div v-if="trendRows.length" class="table-wrap">
+        <el-table :data="trendRows" row-key="bucket" max-height="260">
+          <el-table-column prop="bucket" :label="t('metrics.trend.date')" min-width="140" />
+          <el-table-column prop="execution_count" :label="t('metrics.trend.executions')" width="110" />
+          <el-table-column prop="completed_count" :label="t('metrics.trend.firstPass')" width="110" />
+          <el-table-column prop="healed_completed_count" :label="t('metrics.trend.healed')" width="110" />
+          <el-table-column prop="failed_count" :label="t('metrics.trend.failed')" width="110" />
+          <el-table-column prop="blocked_count" :label="t('metrics.trend.blocked')" width="110" />
+          <el-table-column :label="t('metrics.trend.finalSuccessRate')" width="130">
+            <template #default="{ row }">
+              {{ formatRate(row.final_success_rate) }}
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
       <el-empty v-else :description="t('metrics.empty')" />
     </section>
   </div>
@@ -35,42 +50,16 @@ import { ElMessage } from 'element-plus'
 
 import { useI18n } from '../i18n'
 import { useAppStore } from '../stores/app'
+import { buildMetricCards, formatRate } from '../view-models/metrics'
 
 const appStore = useAppStore()
 const { t } = useI18n()
 
-const formatRate = (value) => `${Math.round((value || 0) * 100)}%`
-
 const cards = computed(() => {
-  if (!appStore.stats) {
-    return []
-  }
-
-  return [
-    { group: t('metrics.groups.volume'), label: t('metrics.labels.generatedCases'), value: appStore.stats.generated_count },
-    { group: t('metrics.groups.volume'), label: t('metrics.labels.executionRecords'), value: appStore.stats.execution_count },
-    {
-      group: t('metrics.groups.success'),
-      label: t('metrics.labels.firstPassSuccessRate'),
-      value: formatRate(appStore.stats.first_pass_success_rate),
-    },
-    {
-      group: t('metrics.groups.healing'),
-      label: t('metrics.labels.selfHealTriggeredRate'),
-      value: formatRate(appStore.stats.self_heal_triggered_rate),
-    },
-    {
-      group: t('metrics.groups.healing'),
-      label: t('metrics.labels.selfHealSuccessRate'),
-      value: formatRate(appStore.stats.self_heal_success_rate),
-    },
-    {
-      group: t('metrics.groups.outcome'),
-      label: t('metrics.labels.finalSuccessRate'),
-      value: formatRate(appStore.stats.final_success_rate),
-    },
-  ]
+  return buildMetricCards(appStore.stats, t)
 })
+
+const trendRows = computed(() => appStore.stats?.trend || [])
 
 const refreshStats = async () => {
   try {

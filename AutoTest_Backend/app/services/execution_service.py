@@ -14,6 +14,22 @@ from app.services.strategy_service import StrategyService
 from app.utils.code_parser import clean_code
 
 
+class _CancelToken:
+    """Thread-safe cancellation signal for a single execution."""
+
+    __slots__ = ("_event",)
+
+    def __init__(self) -> None:
+        self._event = threading.Event()
+
+    def cancel(self) -> None:
+        self._event.set()
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self._event.is_set()
+
+
 SAFE_IMPORTS = {
     "datetime",
     "json",
@@ -91,8 +107,15 @@ class ExecutionService:
         self.test_case_repository = test_case_repository
         self.llm_service = llm_service
         self.strategy_service = strategy_service
+        self._cancel_tokens: dict[str, _CancelToken] = {}
 
     def create_execution(self, *, test_case_id: str, code_override: str | None = None):
+        if self.execution_repository.count_active() >= self.settings.MAX_CONCURRENT_EXECUTIONS:
+            raise AppError(
+                "Execution queue is full. Wait for active jobs to finish before starting another run.",
+                status_code=409,
+                code="execution_queue_full",
+            )
         test_case = self.test_case_repository.get(test_case_id)
         if test_case is None:
             raise AppError(
@@ -118,13 +141,41 @@ class ExecutionService:
         )
         self.test_case_repository.update_status(test_case_id, "queued")
 
+        cancel_token = _CancelToken()
+        self._cancel_tokens[record.id] = cancel_token
+
         worker = threading.Thread(
             target=self._run_execution,
-            args=(record.id,),
+            args=(record.id, cancel_token),
             daemon=True,
         )
         worker.start()
         return self.execution_repository.get(record.id)
+
+    def cancel_execution(self, execution_id: str):
+        record = self.execution_repository.get(execution_id)
+        if record is None:
+            raise AppError(
+                "Execution record was not found.",
+                status_code=404,
+                code="execution_not_found",
+            )
+        if record.status not in ("queued", "running"):
+            raise AppError(
+                "Only queued or running executions can be cancelled.",
+                status_code=409,
+                code="cancel_not_allowed",
+            )
+        token = self._cancel_tokens.get(execution_id)
+        if token is not None:
+            token.cancel()
+        self.execution_repository.mark_finished(
+            execution_id,
+            status="cancelled",
+            error="Execution cancelled by user.",
+        )
+        self._cancel_tokens.pop(execution_id, None)
+        return self.execution_repository.get(execution_id)
 
     def get_execution(self, execution_id: str):
         record = self.execution_repository.get(execution_id)
@@ -136,18 +187,46 @@ class ExecutionService:
             )
         return record
 
-    def list_executions(self, *, limit: int, offset: int):
-        return self.execution_repository.list_recent(limit=limit, offset=offset)
+    def list_executions(self, *, limit: int, offset: int, status: str | None = None):
+        return self.execution_repository.list_recent_filtered(limit=limit, offset=offset, status=status)
+
+    def count_executions(self, *, status: str | None = None) -> int:
+        return self.execution_repository.count_recent(status=status)
 
     def get_stats(self):
         return self.execution_repository.get_stats()
 
-    def _run_execution(self, execution_id: str) -> None:
+    def _run_execution(self, execution_id: str, cancel_token: _CancelToken) -> None:
         record = self.execution_repository.get(execution_id)
         if record is None:
             return
         test_case = self.test_case_repository.get(record.test_case_id)
         if test_case is None:
+            return
+
+        try:
+            self._run_execution_inner(execution_id, record, test_case, cancel_token)
+        except Exception as exc:
+            try:
+                self.execution_repository.mark_finished(
+                    execution_id,
+                    status="failed",
+                    error=f"Unexpected error during execution: {exc}",
+                )
+                self.test_case_repository.update_status(record.test_case_id, "failed")
+            except Exception:
+                pass
+        finally:
+            self._cancel_tokens.pop(execution_id, None)
+
+    def _run_execution_inner(
+        self,
+        execution_id: str,
+        record,
+        test_case,
+        cancel_token: _CancelToken,
+    ) -> None:
+        if cancel_token.is_cancelled:
             return
 
         primary_result = self._execute_script(
@@ -158,7 +237,11 @@ class ExecutionService:
                 run_directory=str(run_dir),
                 script_path=str(script_path),
             ),
+            cancel_token=cancel_token,
         )
+
+        if cancel_token.is_cancelled:
+            return
 
         if primary_result.status == "blocked":
             self.execution_repository.mark_finished(
@@ -198,8 +281,10 @@ class ExecutionService:
             requested_strategy=record.requested_strategy,
             effective_strategy=record.effective_strategy,
             site_profile=record.site_profile,
+            cancel_token=cancel_token,
         )
-        self.test_case_repository.update_status(record.test_case_id, final_status)
+        if final_status is not None:
+            self.test_case_repository.update_status(record.test_case_id, final_status)
 
     def _try_self_heal(
         self,
@@ -212,7 +297,8 @@ class ExecutionService:
         requested_strategy: str,
         effective_strategy: str,
         site_profile: str | None,
-    ) -> str:
+        cancel_token: _CancelToken | None = None,
+    ) -> str | None:
         if self.settings.MAX_SELF_HEAL_ATTEMPTS <= 0:
             self.execution_repository.mark_finished(
                 execution_id,
@@ -233,6 +319,9 @@ class ExecutionService:
         current_site_profile = site_profile
 
         for attempt_number in range(1, self.settings.MAX_SELF_HEAL_ATTEMPTS + 1):
+            if cancel_token.is_cancelled:
+                return None
+
             strategy_decision = self.strategy_service.analyze_repair(
                 prompt=prompt,
                 error=current_result.error,
@@ -335,6 +424,7 @@ class ExecutionService:
                 code=repaired_code,
                 run_directory=repair_run_dir,
                 status_callback=None,
+                cancel_token=cancel_token,
             )
             self.execution_repository.mark_self_heal_attempt_finished(
                 attempt.id,
@@ -389,6 +479,7 @@ class ExecutionService:
         code: str,
         run_directory: Path,
         status_callback,
+        cancel_token: _CancelToken | None = None,
     ) -> ScriptRunResult:
         validation_errors = validate_generated_code(code)
         run_directory.mkdir(parents=True, exist_ok=True)
@@ -420,17 +511,43 @@ class ExecutionService:
             with stdout_path.open("w", encoding="utf-8") as stdout_handle, stderr_path.open(
                 "w", encoding="utf-8"
             ) as stderr_handle:
-                result = subprocess.run(
+                proc = subprocess.Popen(
                     [sys.executable, script_path.name],
                     cwd=run_directory,
                     stdout=stdout_handle,
                     stderr=stderr_handle,
                     text=True,
                     encoding="utf-8",
-                    timeout=self.settings.EXECUTION_TIMEOUT_SECONDS,
                     creationflags=creationflags,
                     env=env,
                 )
+                try:
+                    proc.wait(timeout=self.settings.EXECUTION_TIMEOUT_SECONDS)
+                except subprocess.TimeoutExpired:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                    raise
+                if cancel_token is not None and cancel_token.is_cancelled:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                    return ScriptRunResult(
+                        status="failed",
+                        logs=self._read_text(stdout_path),
+                        error="Execution cancelled by user.",
+                        validation_errors=[],
+                        run_directory=str(run_directory),
+                        script_path=str(script_path),
+                        executed_code=code,
+                    )
+                result = proc
         except subprocess.TimeoutExpired:
             return ScriptRunResult(
                 status="failed",

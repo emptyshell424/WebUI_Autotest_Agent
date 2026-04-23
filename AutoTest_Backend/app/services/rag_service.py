@@ -15,12 +15,12 @@ except ModuleNotFoundError:
 
 
 TERM_ALIASES = {
-    "login": ["登录", "登入", "登陆", "login", "sign in", "log in", "鐧诲綍", "鐧诲叆", "鐧婚檰"],
-    "dashboard": ["dashboard", "首页", "后台首页", "棣栭〉", "鍚庡彴棣栭〉"],
-    "table": ["表格", "table", "琛ㄦ牸"],
-    "form": ["表单", "form", "琛ㄥ崟"],
-    "create": ["创建", "create", "鍒涘缓"],
-    "search": ["搜索", "搜寻", "检索", "查询", "search", "鎼滅储"],
+    "login": ["登录", "登入", "登陆", "login", "sign in", "log in"],
+    "dashboard": ["dashboard", "首页", "后台首页", "控制台"],
+    "table": ["表格", "table"],
+    "form": ["表单", "form"],
+    "create": ["创建", "create", "新建"],
+    "search": ["搜索", "搜寻", "查询", "search"],
     "search_input": [
         "搜索框",
         "search input",
@@ -28,9 +28,9 @@ TERM_ALIASES = {
         "kw",
         "input[name='wd']",
         'input[name="wd"]',
-        "鎼滅储妗?",
+        "关键词输入框",
     ],
-    "baidu": ["百度", "baidu", "百度首页", "鐧惧害", "鐧惧害棣栭〉"],
+    "baidu": ["百度", "baidu", "百度首页"],
     "results_page": [
         "结果页",
         "结果页面",
@@ -39,16 +39,16 @@ TERM_ALIASES = {
         "result container",
         "stable results container",
         "#content_left",
-        "缁撴灉椤?",
-        "缁撴灉椤甸潰",
+        "结果区域",
+        "结果容器",
     ],
-    "verify": ["验证", "断言", "校验", "assert", "verify", "check", "楠岃瘉", "鏂█"],
-    "message": ["提示", "消息", "toast", "success text", "feedback", "鎻愮ず", "娑堟伅"],
-    "click": ["点击", "单击", "click", "button", "submit", "鐐瑰嚮", "鎸夐挳"],
-    "input": ["输入", "填写", "键入", "input", "send_keys", "placeholder", "杈撳叆", "濉啓"],
-    "wait": ["等待", "wait", "explicit wait", "visibility", "clickable", "loading", "绛夊緟"],
-    "safe": ["安全", "safe", "import", "minimal imports", "sys", "os", "subprocess", "pathlib", "瀹夊叏"],
-    "print_completed": ["打印", "测试完成", "Test Completed", "print success", "鎵撳嵃", "娴嬭瘯瀹屾垚"],
+    "verify": ["验证", "断言", "校验", "assert", "verify", "check"],
+    "message": ["提示", "消息", "toast", "success text", "feedback"],
+    "click": ["点击", "单击", "click", "button", "submit"],
+    "input": ["输入", "填写", "键入", "input", "send_keys", "placeholder"],
+    "wait": ["等待", "wait", "explicit wait", "visibility", "clickable", "loading"],
+    "safe": ["安全", "safe", "import", "minimal imports", "sys", "os", "subprocess", "pathlib"],
+    "print_completed": ["打印", "测试完成", "Test Completed", "print success"],
     "homepage_search": [
         "从首页开始",
         "首页搜索框",
@@ -56,15 +56,15 @@ TERM_ALIASES = {
         "点击搜索按钮",
         "模拟用户输入",
         "homepage search box",
-        "浠庨椤靛紑濮?",
+        "首页交互流程",
     ],
     "homepage_timeout": [
         "TimeoutException",
         "timeout",
         "search input timeout",
         "首页搜索框超时",
+        "找不到#kw",
         "找不到kw",
-        "找不到 kw",
     ],
 }
 
@@ -568,6 +568,8 @@ class RAGService:
     def _split_document(self, text: str) -> list[str]:
         normalized = text.replace("\r\n", "\n")
         chunks = [chunk.strip() for chunk in normalized.split("\n\n") if chunk.strip()]
+        if len(chunks) > 1 and chunks[0].startswith("Keywords:"):
+            chunks = [f"{chunks[0]}\n\n{chunks[1]}", *chunks[2:]]
         if chunks:
             return chunks
         return [line.strip() for line in normalized.splitlines() if line.strip()]

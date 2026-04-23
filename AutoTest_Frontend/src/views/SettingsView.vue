@@ -8,7 +8,7 @@
         </div>
       </div>
 
-      <div class="settings-form">
+        <div class="settings-form">
         <el-input v-model="apiBaseUrlDraft" placeholder="http://127.0.0.1:8000/api/v1">
           <template #prepend>{{ t('common.api') }}</template>
         </el-input>
@@ -19,9 +19,41 @@
           <el-button text :loading="appStore.loadingHealth" @click="refreshHealth">{{ t('common.refreshHealth') }}</el-button>
         </div>
 
-        <p class="muted">{{ t('settings.currentApiBaseUrl', { value: appStore.apiBaseUrl }) }}</p>
-      </div>
-    </section>
+          <p class="muted">{{ t('settings.currentApiBaseUrl', { value: appStore.apiBaseUrl }) }}</p>
+        </div>
+      </section>
+
+      <section class="surface-panel">
+        <div class="section-title">
+          <div>
+            <h4>{{ t('settings.runtimeTitle') }}</h4>
+            <p class="section-hint">{{ t('settings.runtimeHint') }}</p>
+          </div>
+        </div>
+
+        <el-alert
+          v-if="appStore.settingsError"
+          :title="appStore.settingsError"
+          type="error"
+          :closable="false"
+          show-icon
+        />
+
+        <div class="settings-form">
+          <el-input-number v-model="runtimeDraft.execution_timeout_seconds" :min="1" :max="3600" />
+          <el-input-number v-model="runtimeDraft.max_self_heal_attempts" :min="0" :max="10" />
+          <el-input-number v-model="runtimeDraft.max_concurrent_executions" :min="1" :max="10" />
+
+          <div class="toolbar-row">
+            <el-button type="primary" :loading="appStore.savingSettings" @click="saveRuntimeSettings">
+              {{ t('settings.saveRuntime') }}
+            </el-button>
+            <el-button text :loading="appStore.loadingSettings" @click="refreshRuntimeSettings">
+              {{ t('settings.refreshRuntime') }}
+            </el-button>
+          </div>
+        </div>
+      </section>
 
     <section class="surface-panel --solid">
       <div class="section-title">
@@ -69,12 +101,30 @@ import { useAppStore } from '../stores/app'
 const appStore = useAppStore()
 const { t } = useI18n()
 const apiBaseUrlDraft = ref(appStore.apiBaseUrl)
+const runtimeDraft = ref({
+  execution_timeout_seconds: 60,
+  max_self_heal_attempts: 1,
+  max_concurrent_executions: 1,
+})
 
 watch(
   () => appStore.apiBaseUrl,
   (value) => {
     apiBaseUrlDraft.value = value
   }
+)
+
+watch(
+  () => appStore.runtimeSettings,
+  (value) => {
+    if (!value) return
+    runtimeDraft.value = {
+      execution_timeout_seconds: value.execution_timeout_seconds,
+      max_self_heal_attempts: value.max_self_heal_attempts,
+      max_concurrent_executions: value.max_concurrent_executions,
+    }
+  },
+  { immediate: true }
 )
 
 const sections = computed(() => {
@@ -135,6 +185,24 @@ const rebuildKnowledge = async () => {
     ElMessage.success(t('settings.knowledgeRebuilt'))
   } catch (error) {
     ElMessage.error(appStore.healthError || t('settings.knowledgeRebuildFailed'))
+  }
+}
+
+const refreshRuntimeSettings = async () => {
+  try {
+    await appStore.fetchRuntimeSettings()
+    ElMessage.success(t('settings.runtimeRefreshed'))
+  } catch (error) {
+    ElMessage.error(appStore.settingsError || t('settings.runtimeRefreshFailed'))
+  }
+}
+
+const saveRuntimeSettings = async () => {
+  try {
+    await appStore.saveRuntimeSettings(runtimeDraft.value)
+    ElMessage.success(t('settings.runtimeSaved'))
+  } catch (error) {
+    ElMessage.error(appStore.settingsError || t('settings.runtimeSaveFailed'))
   }
 }
 </script>

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-import { apiClient, extractApiError } from '../api/client'
+import { apiClient, extractApiError } from '../api/client.js'
 
 let executionPoller = null
 
@@ -22,6 +22,10 @@ export const useWorkspaceStore = defineStore('workspace', {
     knowledgeSources: [],
     ragResultCount: 0,
     history: [],
+    historyTotal: 0,
+    historyStatusFilter: '',
+    historyLimit: 30,
+    historyOffset: 0,
     lastError: '',
   }),
   getters: {
@@ -95,13 +99,17 @@ export const useWorkspaceStore = defineStore('workspace', {
       this.currentExecution = data
       return data
     },
-    async fetchHistory() {
+    async fetchHistory({ limit = this.historyLimit, offset = this.historyOffset, status = this.historyStatusFilter } = {}) {
       this.loadingHistory = true
       try {
+        this.historyLimit = limit
+        this.historyOffset = offset
+        this.historyStatusFilter = status || ''
         const { data } = await apiClient.get('/executions', {
-          params: { limit: 30, offset: 0 },
+          params: { limit, offset, status: status || undefined },
         })
         this.history = data.items
+        this.historyTotal = data.total || data.items.length
         return data.items
       } catch (error) {
         this.lastError = extractApiError(error, 'Unable to load execution history.')
@@ -127,6 +135,12 @@ export const useWorkspaceStore = defineStore('workspace', {
       this.knowledgeSources = []
       this.ragResultCount = 0
       this.activeRetrievalMode = this.retrievalMode
+    },
+    async cancelExecution(executionId) {
+      const { data } = await apiClient.delete(`/executions/${executionId}`)
+      this.currentExecution = data
+      await this.fetchHistory()
+      return data
     },
     startPolling(executionId) {
       this.stopPolling()

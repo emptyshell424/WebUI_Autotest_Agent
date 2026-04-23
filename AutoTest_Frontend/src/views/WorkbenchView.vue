@@ -217,6 +217,7 @@ import { MagicStick, RefreshRight, VideoPlay } from '@element-plus/icons-vue'
 
 import { useI18n } from '../i18n'
 import { useWorkspaceStore } from '../stores/workspace'
+import { buildExecutionOutput, resolveTagType } from '../view-models/workbench'
 
 const workspaceStore = useWorkspaceStore()
 const { t } = useI18n()
@@ -263,11 +264,7 @@ const statusLabel = computed(() => {
 })
 
 const tagType = computed(() => {
-  if (currentStatus.value === 'completed' || currentStatus.value === 'healed_completed') return 'success'
-  if (currentStatus.value === 'failed' || currentStatus.value === 'blocked') return 'danger'
-  if (currentStatus.value === 'healed_failed') return 'warning'
-  if (currentStatus.value === 'queued' || currentStatus.value === 'running') return 'warning'
-  return 'info'
+  return resolveTagType(currentStatus.value)
 })
 
 const executionOutput = computed(() => {
@@ -275,10 +272,7 @@ const executionOutput = computed(() => {
     return ''
   }
 
-  const logs = currentExecution.value.logs || t('common.noStdout')
-  const error = currentExecution.value.error || t('common.noStderr')
-
-  return ['[STDOUT]', logs, '', '[STDERR]', error].join('\n')
+  return buildExecutionOutput(currentExecution.value, t)
 })
 
 const initialFailureReason = computed(() => {

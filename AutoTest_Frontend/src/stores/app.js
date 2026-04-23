@@ -7,18 +7,22 @@ import {
   getStoredApiBaseUrl,
   resetApiBaseUrl,
   setApiBaseUrl,
-} from '../api/client'
+} from '../api/client.js'
 
 export const useAppStore = defineStore('app', {
   state: () => ({
     apiBaseUrl: getStoredApiBaseUrl(),
     health: null,
     stats: null,
+    runtimeSettings: null,
     loadingHealth: false,
     loadingStats: false,
+    loadingSettings: false,
     healthError: '',
     statsError: '',
+    settingsError: '',
     rebuildingKnowledge: false,
+    savingSettings: false,
   }),
   getters: {
     backendConnected: (state) => state.health?.backend?.status === 'healthy' && !state.healthError,
@@ -63,6 +67,35 @@ export const useAppStore = defineStore('app', {
         throw error
       } finally {
         this.loadingStats = false
+      }
+    },
+    async fetchRuntimeSettings() {
+      this.loadingSettings = true
+      this.settingsError = ''
+      try {
+        const { data } = await apiClient.get('/settings')
+        this.runtimeSettings = data.settings
+        return data.settings
+      } catch (error) {
+        this.runtimeSettings = null
+        this.settingsError = extractApiError(error, 'Unable to load runtime settings.')
+        throw error
+      } finally {
+        this.loadingSettings = false
+      }
+    },
+    async saveRuntimeSettings(payload) {
+      this.savingSettings = true
+      this.settingsError = ''
+      try {
+        const { data } = await apiClient.put('/settings', payload)
+        this.runtimeSettings = data.settings
+        return data.settings
+      } catch (error) {
+        this.settingsError = extractApiError(error, 'Unable to save runtime settings.')
+        throw error
+      } finally {
+        this.savingSettings = false
       }
     },
     async rebuildKnowledge() {

@@ -1,17 +1,15 @@
-import shutil
 import unittest
-from pathlib import Path
 
 from . import _bootstrap
+from .runtime_support import RuntimeWorkspaceTestCase
 
 from app.core.config import Settings
 from app.services.rag_service import RAGService
 
 
-class RAGServiceTests(unittest.TestCase):
+class RAGServiceTests(RuntimeWorkspaceTestCase):
     def setUp(self) -> None:
-        self.temp_dir = Path(__file__).resolve().parent / "_rag_runtime"
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        self.temp_dir = self.create_temp_dir("rag-service")
         knowledge_dir = self.temp_dir / "docs" / "knowledge"
         knowledge_dir.mkdir(parents=True, exist_ok=True)
 
@@ -21,7 +19,7 @@ Keywords: login, 登录, username, password, dashboard, admin.
 
 Wait for the username and password inputs, then assert the dashboard text name: admin after login.
 
-登录后应断言 dashboard 或 name: admin，而不是只断言点击成功。
+登录后应断言 dashboard 或 `name: admin`，而不是只断言点击成功。
             """.strip(),
             encoding="utf-8",
         )
@@ -41,7 +39,7 @@ Keywords: safe import, sys, os, subprocess, urllib, quote_plus.
 
 Do not import sys, os, subprocess, or pathlib in ordinary Selenium UI tests. If a search-results URL must be built safely during repair, urllib.parse.quote_plus is allowed.
 
-普通 UI 测试不要导入 sys、os、subprocess、pathlib；如果修复阶段需要安全构造搜索结果 URL，则允许使用 urllib.parse.quote_plus。
+普通 UI 测试不要导入 sys、os、subprocess、pathlib；如果修复阶段需要安全构造结果页 URL，则允许使用 urllib.parse.quote_plus。
             """.strip(),
             encoding="utf-8",
         )
@@ -73,9 +71,6 @@ If the homepage search anchors such as kw or input[name='wd'] time out during se
         )
         self.rag = RAGService(self.settings)
         self.rag.rebuild_index()
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_chinese_login_prompt_matches_login_docs(self) -> None:
         result = self.rag.search(
@@ -113,9 +108,18 @@ If the homepage search anchors such as kw or input[name='wd'] time out during se
         self.assertGreaterEqual(result.result_count, 1)
 
     def test_explicit_modes_return_mode_flag(self) -> None:
-        vector_result = self.rag.search("进入 Form 页面，填写 Activity name，然后点击 Create 按钮。", retrieval_mode="vector")
-        hybrid_result = self.rag.search("进入 Form 页面，填写 Activity name，然后点击 Create 按钮。", retrieval_mode="hybrid")
-        rerank_result = self.rag.search("进入 Form 页面，填写 Activity name，然后点击 Create 按钮。", retrieval_mode="hybrid_rerank")
+        vector_result = self.rag.search(
+            "进入 Form 页面，填写 Activity name，然后点击 Create 按钮。",
+            retrieval_mode="vector",
+        )
+        hybrid_result = self.rag.search(
+            "进入 Form 页面，填写 Activity name，然后点击 Create 按钮。",
+            retrieval_mode="hybrid",
+        )
+        rerank_result = self.rag.search(
+            "进入 Form 页面，填写 Activity name，然后点击 Create 按钮。",
+            retrieval_mode="hybrid_rerank",
+        )
 
         self.assertEqual(vector_result.retrieval_mode, "vector")
         self.assertEqual(hybrid_result.retrieval_mode, "hybrid")

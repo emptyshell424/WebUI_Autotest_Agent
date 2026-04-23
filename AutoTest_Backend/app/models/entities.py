@@ -69,3 +69,14 @@ class SettingRecord:
     key: str
     value: str
     updated_at: str
+
+
+@dataclass(slots=True)
+class ExecutionTrendPoint:
+    bucket: str
+    execution_count: int
+    completed_count: int
+    healed_completed_count: int
+    failed_count: int
+    blocked_count: int
+    final_success_rate: float

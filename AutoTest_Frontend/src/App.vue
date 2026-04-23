@@ -144,7 +144,12 @@ const refreshHealth = async () => {
 onMounted(async () => {
   appStore.bootstrap()
   try {
-    await Promise.all([appStore.fetchHealth(), appStore.fetchStats(), workspaceStore.fetchHistory()])
+    await Promise.all([
+      appStore.fetchHealth(),
+      appStore.fetchStats(),
+      appStore.fetchRuntimeSettings(),
+      workspaceStore.fetchHistory(),
+    ])
   } catch (error) {
     console.error(error)
   }

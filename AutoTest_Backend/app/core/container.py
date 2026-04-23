@@ -34,16 +34,33 @@ def create_container(settings: Settings | None = None) -> ServiceContainer:
     test_cases = TestCaseRepository(active_settings)
     executions = ExecutionRepository(active_settings)
     system_settings = SettingsRepository(active_settings)
+    persisted_settings = system_settings.get_many(
+        [
+            "execution_timeout_seconds",
+            "max_self_heal_attempts",
+            "max_concurrent_executions",
+        ]
+    )
+    if "execution_timeout_seconds" in persisted_settings:
+        active_settings.EXECUTION_TIMEOUT_SECONDS = int(persisted_settings["execution_timeout_seconds"])
+    if "max_self_heal_attempts" in persisted_settings:
+        active_settings.MAX_SELF_HEAL_ATTEMPTS = int(persisted_settings["max_self_heal_attempts"])
+    if "max_concurrent_executions" in persisted_settings:
+        active_settings.MAX_CONCURRENT_EXECUTIONS = int(
+            persisted_settings["max_concurrent_executions"]
+        )
     rag = RAGService(active_settings)
     llm = LLMService(active_settings)
     strategy = StrategyService()
     generation = GenerationService(llm, rag, test_cases, strategy)
+    executions.recover_interrupted_executions()
     execution_service = ExecutionService(active_settings, executions, test_cases, llm, strategy)
 
     system_settings.upsert_many(
         {
             "execution_timeout_seconds": str(active_settings.EXECUTION_TIMEOUT_SECONDS),
             "max_self_heal_attempts": str(active_settings.MAX_SELF_HEAL_ATTEMPTS),
+            "max_concurrent_executions": str(active_settings.MAX_CONCURRENT_EXECUTIONS),
             "knowledge_base_dir": str(active_settings.knowledge_base_dir),
             "model_name": active_settings.MODEL_NAME,
         }

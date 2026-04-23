@@ -14,3 +14,4 @@ temp_scripts/
 *.sqlite3
 tests/.tmp/
 tests/_runtime/
+.tmp/

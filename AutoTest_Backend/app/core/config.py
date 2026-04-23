@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     EXECUTIONS_DIR: str = "runs"
     EXECUTION_TIMEOUT_SECONDS: int = 60
     MAX_SELF_HEAL_ATTEMPTS: int = 1
+    MAX_CONCURRENT_EXECUTIONS: int = 1
     FRONTEND_ORIGINS: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",

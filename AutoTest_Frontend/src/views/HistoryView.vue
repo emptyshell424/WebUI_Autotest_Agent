@@ -11,6 +11,20 @@
         </el-button>
       </div>
 
+      <div class="toolbar-row">
+        <el-select v-model="historyStatusFilter" clearable @change="refreshHistory">
+          <el-option :label="t('history.allStatuses')" value="" />
+          <el-option :label="t('workbench.status.queued')" value="queued" />
+          <el-option :label="t('workbench.status.running')" value="running" />
+          <el-option :label="t('workbench.status.completed')" value="completed" />
+          <el-option :label="t('workbench.status.healed_completed')" value="healed_completed" />
+          <el-option :label="t('workbench.status.failed')" value="failed" />
+          <el-option :label="t('workbench.status.healed_failed')" value="healed_failed" />
+          <el-option :label="t('workbench.status.blocked')" value="blocked" />
+          <el-option :label="t('workbench.status.cancelled')" value="cancelled" />
+        </el-select>
+      </div>
+
       <div class="table-wrap">
         <el-table
           :data="history"
@@ -38,13 +52,21 @@
           <el-table-column prop="self_heal_count" :label="t('history.repairs')" width="100" />
           <el-table-column prop="created_at" :label="t('history.createdAt')" min-width="220" />
           <el-table-column prop="finished_at" :label="t('history.finishedAt')" min-width="220" />
-          <el-table-column :label="t('history.actions')" width="120" fixed="right">
+          <el-table-column :label="t('history.actions')" width="160" fixed="right">
             <template #default="{ row }">
               <el-button text @click.stop="selectExecution(row)">{{ t('common.inspect') }}</el-button>
+              <el-button text type="danger" @click.stop="handleCancel(row)" v-if="row.status === 'queued' || row.status === 'running'">{{ t('history.cancel') }}</el-button>
             </template>
           </el-table-column>
         </el-table>
       </div>
+      <el-pagination
+        layout="prev, pager, next, total"
+        :page-size="historyLimit"
+        :total="historyTotal"
+        :current-page="currentPage"
+        @current-change="handlePageChange"
+      />
     </section>
 
     <section class="surface-panel --solid">
@@ -132,7 +154,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
@@ -140,23 +162,20 @@ import { RefreshRight } from '@element-plus/icons-vue'
 
 import { useI18n } from '../i18n'
 import { useWorkspaceStore } from '../stores/workspace'
+import { buildHistoryOutput, classifyOutcome as classifyOutcomeValue } from '../view-models/history'
 
 const router = useRouter()
 const workspaceStore = useWorkspaceStore()
-const { currentExecution, history, loadingHistory } = storeToRefs(workspaceStore)
+const { currentExecution, history, historyTotal, historyLimit, loadingHistory } = storeToRefs(workspaceStore)
 const { t } = useI18n()
+const historyStatusFilter = ref(workspaceStore.historyStatusFilter)
+const currentPage = computed(() => Math.floor(workspaceStore.historyOffset / workspaceStore.historyLimit) + 1)
 
 const historyOutput = computed(() => {
   if (!currentExecution.value) {
     return ''
   }
-  return [
-    '[STDOUT]',
-    currentExecution.value.logs || t('common.noStdout'),
-    '',
-    '[STDERR]',
-    currentExecution.value.error || t('common.noStderr'),
-  ].join('\n')
+  return buildHistoryOutput(currentExecution.value, t)
 })
 
 const initialFailureReason = computed(() => {
@@ -187,20 +206,30 @@ const formatFallbackReason = (value) => {
 }
 
 const classifyOutcome = (row) => {
-  if (row.status === 'completed') return t('history.outcomeFirstPass')
-  if (row.status === 'healed_completed') return t('history.outcomeRepairSuccess')
-  if (row.status === 'healed_failed') return t('history.outcomeRepairFailed')
-  if (row.status === 'blocked') return t('history.outcomeBlocked')
-  return t('history.outcomeRunFailed')
+  return classifyOutcomeValue(row.status, t)
 }
 
 const refreshHistory = async () => {
   try {
-    const items = await workspaceStore.fetchHistory()
+    const items = await workspaceStore.fetchHistory({
+      offset: 0,
+      status: historyStatusFilter.value,
+    })
     if (!currentExecution.value && items.length) {
       await workspaceStore.inspectExecution(items[0].id)
     }
     ElMessage.success(t('history.historyRefreshed'))
+  } catch (error) {
+    ElMessage.error(workspaceStore.lastError || t('history.historyRefreshFailed'))
+  }
+}
+
+const handlePageChange = async (page) => {
+  try {
+    await workspaceStore.fetchHistory({
+      offset: (page - 1) * workspaceStore.historyLimit,
+      status: historyStatusFilter.value,
+    })
   } catch (error) {
     ElMessage.error(workspaceStore.lastError || t('history.historyRefreshFailed'))
   }
@@ -218,6 +247,15 @@ const openInWorkbench = () => {
   if (!currentExecution.value) return
   workspaceStore.hydrateFromHistory(currentExecution.value)
   router.push('/')
+}
+
+const handleCancel = async (row) => {
+  try {
+    await workspaceStore.cancelExecution(row.id)
+    ElMessage.success(t('history.cancelled'))
+  } catch (error) {
+    ElMessage.error(workspaceStore.lastError || t('history.cancelFailed'))
+  }
 }
 
 onMounted(async () => {

@@ -6,10 +6,14 @@ import {
   ElEmpty,
   ElIcon,
   ElInput,
+  ElInputNumber,
   ElMenu,
   ElMenuItem,
+  ElOption,
+  ElPagination,
   ElRadioButton,
   ElRadioGroup,
+  ElSelect,
   ElSegmented,
   ElSwitch,
   ElTable,
@@ -22,11 +26,15 @@ import 'element-plus/es/components/button/style/css'
 import 'element-plus/es/components/empty/style/css'
 import 'element-plus/es/components/icon/style/css'
 import 'element-plus/es/components/input/style/css'
+import 'element-plus/es/components/input-number/style/css'
 import 'element-plus/es/components/menu/style/css'
 import 'element-plus/es/components/menu-item/style/css'
 import 'element-plus/es/components/message/style/css'
+import 'element-plus/es/components/option/style/css'
+import 'element-plus/es/components/pagination/style/css'
 import 'element-plus/es/components/radio-button/style/css'
 import 'element-plus/es/components/radio-group/style/css'
+import 'element-plus/es/components/select/style/css'
 import 'element-plus/es/components/segmented/style/css'
 import 'element-plus/es/components/switch/style/css'
 import 'element-plus/es/components/table/style/css'
@@ -48,10 +56,14 @@ app.use(router)
   ElEmpty,
   ElIcon,
   ElInput,
+  ElInputNumber,
   ElMenu,
   ElMenuItem,
+  ElOption,
+  ElPagination,
   ElRadioButton,
   ElRadioGroup,
+  ElSelect,
   ElSegmented,
   ElSwitch,
   ElTable,

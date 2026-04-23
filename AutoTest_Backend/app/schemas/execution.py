@@ -58,6 +58,18 @@ class ExecutionListResponse(BaseModel):
     items: list[ExecutionRead]
     limit: int
     offset: int
+    total: int
+    status_filter: str | None = None
+
+
+class ExecutionTrendPointRead(BaseModel):
+    bucket: str
+    execution_count: int
+    completed_count: int
+    healed_completed_count: int
+    failed_count: int
+    blocked_count: int
+    final_success_rate: float
 
 
 class ExecutionStatsRead(BaseModel):
@@ -72,6 +84,7 @@ class ExecutionStatsRead(BaseModel):
     self_heal_triggered_rate: float
     self_heal_success_rate: float
     final_success_rate: float
+    trend: list[ExecutionTrendPointRead] = Field(default_factory=list)
 
 
 class ExecutionStatsResponse(BaseModel):

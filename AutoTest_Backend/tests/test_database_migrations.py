@@ -1,19 +1,16 @@
 ﻿import sqlite3
-import shutil
 import unittest
-from pathlib import Path
 
 from . import _bootstrap
+from .runtime_support import RuntimeWorkspaceTestCase
 
 from app.core.config import Settings
 from app.core.database import initialize_database
 
 
-class DatabaseMigrationTests(unittest.TestCase):
+class DatabaseMigrationTests(RuntimeWorkspaceTestCase):
     def setUp(self) -> None:
-        self.temp_dir = Path(__file__).resolve().parent / "_migration_runtime"
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.temp_dir = self.create_temp_dir("database-migrations")
         self.db_path = self.temp_dir / "app.db"
         connection = sqlite3.connect(self.db_path)
         connection.executescript(
@@ -74,9 +71,6 @@ class DatabaseMigrationTests(unittest.TestCase):
             KNOWLEDGE_BASE_DIR=str(self.temp_dir / "knowledge"),
             EXECUTIONS_DIR=str(self.temp_dir / "runs"),
         )
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_initialize_database_adds_strategy_columns_to_existing_tables(self) -> None:
         initialize_database(self.settings)

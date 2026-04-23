@@ -1,12 +1,13 @@
-﻿import shutil
 import unittest
-from pathlib import Path
 
 from . import _bootstrap
+from .runtime_support import RuntimeWorkspaceTestCase
 from app.core.config import Settings
+from app.core.exceptions import AppError
 from app.core.database import initialize_database
+from app.core.container import create_container
 from app.repositories import ExecutionRepository, TestCaseRepository
-from app.services.execution_service import ExecutionService
+from app.services.execution_service import ExecutionService, _CancelToken
 from app.services.strategy_service import StrategyService
 
 
@@ -33,10 +34,9 @@ class SequenceLLMService:
         return result
 
 
-class SelfHealFlowTests(unittest.TestCase):
+class SelfHealFlowTests(RuntimeWorkspaceTestCase):
     def setUp(self) -> None:
-        self.temp_dir = Path(__file__).resolve().parent / "_self_heal_runtime"
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        self.temp_dir = self.create_temp_dir("self-heal-flow")
         (self.temp_dir / "docs" / "knowledge").mkdir(parents=True, exist_ok=True)
         self.settings = Settings(
             DEEPSEEK_API_KEY="test-key",
@@ -51,9 +51,6 @@ class SelfHealFlowTests(unittest.TestCase):
         self.test_cases = TestCaseRepository(self.settings)
         self.executions = ExecutionRepository(self.settings)
         self.strategy_service = StrategyService()
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def _create_case(self, *, title: str, prompt: str, generated_code: str, rag_context: str):
         strategy = self.strategy_service.analyze_generation(prompt)
@@ -90,7 +87,7 @@ class SelfHealFlowTests(unittest.TestCase):
             self.strategy_service,
         )
 
-        service._run_execution(record.id)
+        service._run_execution(record.id, _CancelToken())
 
         saved = self.executions.get(record.id)
         self.assertIsNotNone(saved)
@@ -139,7 +136,7 @@ class SelfHealFlowTests(unittest.TestCase):
             self.strategy_service,
         )
 
-        service._run_execution(record.id)
+        service._run_execution(record.id, _CancelToken())
 
         saved = self.executions.get(record.id)
         self.assertIsNotNone(saved)
@@ -183,7 +180,7 @@ class SelfHealFlowTests(unittest.TestCase):
             self.strategy_service,
         )
 
-        service._run_execution(record.id)
+        service._run_execution(record.id, _CancelToken())
 
         saved = self.executions.get(record.id)
         self.assertIsNotNone(saved)
@@ -220,7 +217,7 @@ class SelfHealFlowTests(unittest.TestCase):
             self.strategy_service,
         )
 
-        service._run_execution(record.id)
+        service._run_execution(record.id, _CancelToken())
 
         saved = self.executions.get(record.id)
         self.assertIsNotNone(saved)
@@ -244,6 +241,11 @@ class SelfHealFlowTests(unittest.TestCase):
             effective_strategy=completed_case.effective_strategy,
             site_profile=None,
         )
+        self.executions.mark_running(
+            completed_execution.id,
+            run_directory="runs/completed",
+            script_path="runs/completed/generated_test.py",
+        )
         self.executions.mark_finished(
             completed_execution.id,
             status="completed",
@@ -263,6 +265,11 @@ class SelfHealFlowTests(unittest.TestCase):
             requested_strategy=healed_case.requested_strategy,
             effective_strategy=healed_case.effective_strategy,
             site_profile=None,
+        )
+        self.executions.mark_running(
+            healed_execution.id,
+            run_directory="runs/healed",
+            script_path="runs/healed/generated_test.py",
         )
         self.executions.create_self_heal_attempt(
             execution_id=healed_execution.id,
@@ -294,6 +301,11 @@ class SelfHealFlowTests(unittest.TestCase):
             requested_strategy=blocked_case.requested_strategy,
             effective_strategy=blocked_case.effective_strategy,
             site_profile=None,
+        )
+        self.executions.mark_running(
+            blocked_execution.id,
+            run_directory="runs/blocked",
+            script_path="runs/blocked/generated_test.py",
         )
         self.executions.mark_finished(
             blocked_execution.id,
@@ -353,8 +365,255 @@ class SelfHealFlowTests(unittest.TestCase):
         self.assertEqual(stats["self_heal_success_count"], 1)
         self.assertEqual(stats["final_success_count"], 2)
         self.assertEqual(stats["final_success_rate"], 1.0)
+        self.assertTrue(stats["trend"])
+
+    def test_queue_limit_rejects_new_execution_when_active_count_is_full(self) -> None:
+        self.settings.MAX_CONCURRENT_EXECUTIONS = 1
+        service = ExecutionService(
+            self.settings,
+            self.executions,
+            self.test_cases,
+            FakeLLMService("print('unused')"),
+            self.strategy_service,
+        )
+        case = self._create_case(
+            title="queue limit",
+            prompt="queued",
+            generated_code="print('queued')",
+            rag_context="",
+        )
+        active = self.executions.create(
+            test_case_id=case.id,
+            executed_code=case.generated_code,
+            requested_strategy=case.requested_strategy,
+            effective_strategy=case.effective_strategy,
+            site_profile=None,
+        )
+        self.executions.mark_running(
+            active.id,
+            run_directory="runs/in-progress",
+            script_path="runs/in-progress/generated_test.py",
+        )
+
+        with self.assertRaises(AppError) as context:
+            service.create_execution(test_case_id=case.id)
+
+        self.assertEqual(context.exception.code, "execution_queue_full")
+
+    def test_cancel_execution_marks_queued_as_cancelled(self) -> None:
+        case = self._create_case(
+            title="cancel me queued",
+            prompt="Open page and verify success message",
+            generated_code="print('hello')",
+            rag_context="",
+        )
+        record = self.executions.create(
+            test_case_id=case.id,
+            executed_code=case.generated_code,
+            requested_strategy=case.requested_strategy,
+            effective_strategy=case.effective_strategy,
+            site_profile=None,
+        )
+        service = ExecutionService(
+            self.settings,
+            self.executions,
+            self.test_cases,
+            FakeLLMService("print('unused')"),
+            self.strategy_service,
+        )
+        result = service.cancel_execution(record.id)
+        self.assertEqual(result.status, "cancelled")
+        self.assertIn("cancelled", result.error or "")
+
+    def test_cancel_execution_marks_running_as_cancelled(self) -> None:
+        case = self._create_case(
+            title="cancel me running",
+            prompt="Open page and verify success message",
+            generated_code="print('hello')",
+            rag_context="",
+        )
+        record = self.executions.create(
+            test_case_id=case.id,
+            executed_code=case.generated_code,
+            requested_strategy=case.requested_strategy,
+            effective_strategy=case.effective_strategy,
+            site_profile=None,
+        )
+        self.executions.mark_running(
+            record.id,
+            run_directory="runs/cancel-running",
+            script_path="runs/cancel-running/generated_test.py",
+        )
+        service = ExecutionService(
+            self.settings,
+            self.executions,
+            self.test_cases,
+            FakeLLMService("print('unused')"),
+            self.strategy_service,
+        )
+        result = service.cancel_execution(record.id)
+        self.assertEqual(result.status, "cancelled")
+        self.assertIn("cancelled", result.error or "")
+
+    def test_cancel_execution_rejects_already_finished(self) -> None:
+        case = self._create_case(
+            title="already done",
+            prompt="done",
+            generated_code="print('done')",
+            rag_context="",
+        )
+        record = self.executions.create(
+            test_case_id=case.id,
+            executed_code=case.generated_code,
+            requested_strategy=case.requested_strategy,
+            effective_strategy=case.effective_strategy,
+            site_profile=None,
+        )
+        self.executions.mark_running(
+            record.id,
+            run_directory="runs/already-done",
+            script_path="runs/already-done/generated_test.py",
+        )
+        self.executions.mark_finished(record.id, status="completed", logs="done")
+        service = ExecutionService(
+            self.settings,
+            self.executions,
+            self.test_cases,
+            FakeLLMService("print('unused')"),
+            self.strategy_service,
+        )
+
+        with self.assertRaises(AppError) as context:
+            service.cancel_execution(record.id)
+        self.assertEqual(context.exception.code, "cancel_not_allowed")
+
+    def test_service_recovers_interrupted_active_records_on_startup(self) -> None:
+        case = self._create_case(
+            title="interrupted",
+            prompt="queued",
+            generated_code="print('queued')",
+            rag_context="",
+        )
+        record = self.executions.create(
+            test_case_id=case.id,
+            executed_code=case.generated_code,
+            requested_strategy=case.requested_strategy,
+            effective_strategy=case.effective_strategy,
+            site_profile=None,
+        )
+        self.executions.mark_running(
+            record.id,
+            run_directory="runs/in-progress",
+            script_path="runs/in-progress/generated_test.py",
+        )
+
+        container = create_container(self.settings)
+        self.assertIsNotNone(container.execution_service)
+
+        recovered = self.executions.get(record.id)
+        self.assertIsNotNone(recovered)
+        self.assertEqual(recovered.status, "failed")
+        self.assertIn("interrupted", recovered.error or "")
+
+
+    def test_invalid_transition_from_queued_to_completed_is_rejected(self) -> None:
+        case = self._create_case(
+            title="bad transition",
+            prompt="done",
+            generated_code="print('done')",
+            rag_context="",
+        )
+        record = self.executions.create(
+            test_case_id=case.id,
+            executed_code=case.generated_code,
+            requested_strategy=case.requested_strategy,
+            effective_strategy=case.effective_strategy,
+            site_profile=None,
+        )
+        with self.assertRaises(AppError) as context:
+            self.executions.mark_finished(record.id, status="completed", logs="done")
+        self.assertEqual(context.exception.code, "invalid_status_transition")
+
+    def test_invalid_transition_from_completed_to_running_is_rejected(self) -> None:
+        case = self._create_case(
+            title="double run",
+            prompt="done",
+            generated_code="print('done')",
+            rag_context="",
+        )
+        record = self.executions.create(
+            test_case_id=case.id,
+            executed_code=case.generated_code,
+            requested_strategy=case.requested_strategy,
+            effective_strategy=case.effective_strategy,
+            site_profile=None,
+        )
+        self.executions.mark_running(
+            record.id,
+            run_directory="runs/done",
+            script_path="runs/done/generated_test.py",
+        )
+        self.executions.mark_finished(record.id, status="completed", logs="done")
+        with self.assertRaises(AppError) as context:
+            self.executions.mark_running(
+                record.id,
+                run_directory="runs/again",
+                script_path="runs/again/generated_test.py",
+            )
+        self.assertEqual(context.exception.code, "invalid_status_transition")
+
+    def test_unexpected_exception_is_persisted_as_failed(self) -> None:
+        case = self._create_case(
+            title="crash",
+            prompt="Open page",
+            generated_code="print('crash')",
+            rag_context="",
+        )
+        record = self.executions.create(
+            test_case_id=case.id,
+            executed_code=case.generated_code,
+            requested_strategy=case.requested_strategy,
+            effective_strategy=case.effective_strategy,
+            site_profile=None,
+        )
+        llm = FakeLLMService("print('unused')")
+        service = ExecutionService(
+            self.settings,
+            self.executions,
+            self.test_cases,
+            llm,
+            self.strategy_service,
+        )
+        original_execute = service._execute_script
+        def exploding_execute(**kwargs):
+            raise RuntimeError("disk full")
+        service._execute_script = exploding_execute
+
+        service._run_execution(record.id, _CancelToken())
+
+        saved = self.executions.get(record.id)
+        self.assertIsNotNone(saved)
+        self.assertEqual(saved.status, "failed")
+        self.assertIn("disk full", saved.error or "")
+
+    def test_valid_transition_queued_to_cancelled(self) -> None:
+        case = self._create_case(
+            title="cancel queued",
+            prompt="cancel",
+            generated_code="print('cancel')",
+            rag_context="",
+        )
+        record = self.executions.create(
+            test_case_id=case.id,
+            executed_code=case.generated_code,
+            requested_strategy=case.requested_strategy,
+            effective_strategy=case.effective_strategy,
+            site_profile=None,
+        )
+        self.executions.mark_finished(record.id, status="cancelled", error="User cancelled.")
+        saved = self.executions.get(record.id)
+        self.assertEqual(saved.status, "cancelled")
 
 
 if __name__ == "__main__":
     unittest.main()
-
