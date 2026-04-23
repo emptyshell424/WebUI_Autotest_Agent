@@ -1,13 +1,13 @@
-import test from 'node:test'
-import assert from 'node:assert/strict'
-
+import { describe, it, expect } from 'vitest'
 import { buildHistoryOutput, classifyOutcome } from './history.js'
 
 const t = (key) => key
 
-test('history helper classifies outcome and formats output', () => {
-  assert.equal(classifyOutcome('healed_completed', t), 'history.outcomeRepairSuccess')
-  const output = buildHistoryOutput({ logs: 'done', error: '' }, t)
-  assert.match(output, /\[STDOUT\]/)
-  assert.match(output, /done/)
+describe('history helpers', () => {
+  it('classifies outcome and formats output', () => {
+    expect(classifyOutcome('healed_completed', t)).toBe('history.outcomeRepairSuccess')
+    const output = buildHistoryOutput({ logs: 'done', error: '' }, t)
+    expect(output).toMatch(/\[STDOUT\]/)
+    expect(output).toMatch(/done/)
+  })
 })

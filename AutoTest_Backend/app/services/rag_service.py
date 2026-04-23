@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import re
 from collections import Counter
@@ -7,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.core.config import Settings
+
+logger = logging.getLogger("autotest.rag")
 
 try:
     import chromadb  # type: ignore
@@ -556,7 +559,7 @@ class RAGService:
         try:
             self.client.delete_collection(self.collection_name)
         except Exception:
-            pass
+            logger.warning("Failed to delete collection %s, continuing", self.collection_name, exc_info=True)
 
     def _knowledge_files(self) -> list[Path]:
         if not self.settings.knowledge_base_dir.exists():

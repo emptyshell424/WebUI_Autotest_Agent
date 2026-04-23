@@ -1,4 +1,5 @@
 import ast
+import logging
 import os
 import subprocess
 import sys
@@ -12,6 +13,8 @@ from app.repositories import ExecutionRepository, TestCaseRepository
 from app.services.llm_service import LLMService
 from app.services.strategy_service import StrategyService
 from app.utils.code_parser import clean_code
+
+logger = logging.getLogger("autotest.execution")
 
 
 class _CancelToken:
@@ -207,6 +210,7 @@ class ExecutionService:
         try:
             self._run_execution_inner(execution_id, record, test_case, cancel_token)
         except Exception as exc:
+            logger.exception("Unexpected error during execution %s", execution_id)
             try:
                 self.execution_repository.mark_finished(
                     execution_id,
@@ -215,7 +219,7 @@ class ExecutionService:
                 )
                 self.test_case_repository.update_status(record.test_case_id, "failed")
             except Exception:
-                pass
+                logger.exception("Failed to mark execution %s as failed", execution_id)
         finally:
             self._cancel_tokens.pop(execution_id, None)
 

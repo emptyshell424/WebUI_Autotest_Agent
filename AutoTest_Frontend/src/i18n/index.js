@@ -230,6 +230,9 @@ const messages = {
       runtimeSaveFailed: 'Failed to save runtime settings.',
       runtimeRefreshed: 'Runtime settings refreshed.',
       runtimeRefreshFailed: 'Failed to refresh runtime settings.',
+      labelTimeout: 'Execution timeout (seconds)',
+      labelSelfHeal: 'Max self-heal attempts',
+      labelConcurrency: 'Max concurrent executions',
     },
   },
   'zh-CN': {
@@ -452,6 +455,9 @@ const messages = {
       runtimeSaveFailed: '保存运行时设置失败。',
       runtimeRefreshed: '运行时设置已刷新。',
       runtimeRefreshFailed: '刷新运行时设置失败。',
+      labelTimeout: '执行超时时间（秒）',
+      labelSelfHeal: '最大自愈重试次数',
+      labelConcurrency: '最大并发执行数',
     },
   },
 }

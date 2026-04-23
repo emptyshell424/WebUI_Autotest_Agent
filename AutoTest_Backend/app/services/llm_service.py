@@ -1,4 +1,6 @@
-﻿from openai import OpenAI
+﻿import logging
+
+from openai import OpenAI
 
 from app.core.config import Settings
 from app.core.exceptions import AppError
@@ -36,6 +38,8 @@ SELF_HEAL_SYSTEM_PROMPT = (
 # Backward-compatible exports used by tests.
 SYSTEM_PROMPT = BASE_SYSTEM_PROMPT
 SELF_HEAL_PROMPT = SELF_HEAL_SYSTEM_PROMPT
+
+logger = logging.getLogger("autotest.llm")
 
 
 class LLMService:
@@ -106,6 +110,7 @@ class LLMService:
 
     def _complete(self, *, messages: list[dict[str, str]]) -> str:
         client = self._get_client()
+        logger.info("LLM request: model=%s, messages=%d", self.settings.MODEL_NAME, len(messages))
         try:
             response = client.chat.completions.create(
                 model=self.settings.MODEL_NAME,
@@ -116,6 +121,7 @@ class LLMService:
         except AppError:
             raise
         except Exception as exc:
+            logger.exception("LLM request failed")
             raise AppError(
                 "LLM request failed.",
                 status_code=502,
@@ -125,11 +131,13 @@ class LLMService:
 
         content = (response.choices[0].message.content or "").strip()
         if not content:
+            logger.warning("LLM returned empty content")
             raise AppError(
                 "LLM returned empty content.",
                 status_code=502,
                 code="llm_empty_response",
             )
+        logger.info("LLM response: %d chars", len(content))
         return content
 
     def _get_client(self) -> OpenAI:

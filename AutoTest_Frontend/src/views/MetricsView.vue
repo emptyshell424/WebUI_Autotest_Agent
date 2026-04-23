@@ -24,6 +24,12 @@
           <p class="section-hint">{{ card.label }}</p>
         </article>
       </div>
+      <TrendChart
+        v-if="trendRows.length"
+        :rows="trendRows"
+        :labels="chartLabels"
+      />
+
       <div v-if="trendRows.length" class="table-wrap">
         <el-table :data="trendRows" row-key="bucket" max-height="260">
           <el-table-column prop="bucket" :label="t('metrics.trend.date')" min-width="140" />
@@ -51,6 +57,7 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from '../i18n'
 import { useAppStore } from '../stores/app'
 import { buildMetricCards, formatRate } from '../view-models/metrics'
+import TrendChart from '../components/TrendChart.vue'
 
 const appStore = useAppStore()
 const { t } = useI18n()
@@ -60,6 +67,14 @@ const cards = computed(() => {
 })
 
 const trendRows = computed(() => appStore.stats?.trend || [])
+
+const chartLabels = computed(() => ({
+  firstPass: t('metrics.trend.firstPass'),
+  healed: t('metrics.trend.healed'),
+  failed: t('metrics.trend.failed'),
+  blocked: t('metrics.trend.blocked'),
+  successRate: t('metrics.trend.finalSuccessRate'),
+}))
 
 const refreshStats = async () => {
   try {

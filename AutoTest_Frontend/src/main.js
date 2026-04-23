@@ -4,6 +4,8 @@ import {
   ElAlert,
   ElButton,
   ElEmpty,
+  ElForm,
+  ElFormItem,
   ElIcon,
   ElInput,
   ElInputNumber,
@@ -24,6 +26,8 @@ import {
 import 'element-plus/es/components/alert/style/css'
 import 'element-plus/es/components/button/style/css'
 import 'element-plus/es/components/empty/style/css'
+import 'element-plus/es/components/form/style/css'
+import 'element-plus/es/components/form-item/style/css'
 import 'element-plus/es/components/icon/style/css'
 import 'element-plus/es/components/input/style/css'
 import 'element-plus/es/components/input-number/style/css'
@@ -54,6 +58,8 @@ app.use(router)
   ElAlert,
   ElButton,
   ElEmpty,
+  ElForm,
+  ElFormItem,
   ElIcon,
   ElInput,
   ElInputNumber,

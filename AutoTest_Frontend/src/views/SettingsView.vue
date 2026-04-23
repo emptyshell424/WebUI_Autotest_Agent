@@ -40,9 +40,17 @@
         />
 
         <div class="settings-form">
-          <el-input-number v-model="runtimeDraft.execution_timeout_seconds" :min="1" :max="3600" />
-          <el-input-number v-model="runtimeDraft.max_self_heal_attempts" :min="0" :max="10" />
-          <el-input-number v-model="runtimeDraft.max_concurrent_executions" :min="1" :max="10" />
+          <el-form label-position="left" label-width="240px">
+            <el-form-item :label="t('settings.labelTimeout')">
+              <el-input-number v-model="runtimeDraft.execution_timeout_seconds" :min="1" :max="3600" />
+            </el-form-item>
+            <el-form-item :label="t('settings.labelSelfHeal')">
+              <el-input-number v-model="runtimeDraft.max_self_heal_attempts" :min="0" :max="10" />
+            </el-form-item>
+            <el-form-item :label="t('settings.labelConcurrency')">
+              <el-input-number v-model="runtimeDraft.max_concurrent_executions" :min="1" :max="10" />
+            </el-form-item>
+          </el-form>
 
           <div class="toolbar-row">
             <el-button type="primary" :loading="appStore.savingSettings" @click="saveRuntimeSettings">

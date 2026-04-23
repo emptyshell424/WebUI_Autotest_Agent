@@ -37,7 +37,7 @@ jobs:
           cache-dependency-path: AutoTest_Frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci
-      - name: Run frontend tests
+      - name: Run frontend tests (vitest)
         run: npm test
       - name: Build frontend
         run: npm run build

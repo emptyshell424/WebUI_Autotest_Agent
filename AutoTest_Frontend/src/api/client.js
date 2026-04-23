@@ -42,6 +42,21 @@ export const extractApiError = (error, fallbackMessage) => {
   )
 }
 
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status
+    if (status === 401 || status === 403) {
+      console.warn(`[apiClient] Auth error ${status}:`, error.config?.url)
+    } else if (status >= 500) {
+      console.error(`[apiClient] Server error ${status}:`, error.config?.url)
+    } else if (!error.response) {
+      console.error('[apiClient] Network error:', error.message)
+    }
+    return Promise.reject(error)
+  }
+)
+
 setApiBaseUrl(getStoredApiBaseUrl())
 
 export { apiClient, DEFAULT_API_BASE_URL }

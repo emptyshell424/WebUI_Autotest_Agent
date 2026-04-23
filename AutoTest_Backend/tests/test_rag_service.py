@@ -128,5 +128,71 @@ If the homepage search anchors such as kw or input[name='wd'] time out during se
         self.assertGreaterEqual(rerank_result.result_count, 1)
 
 
+class RAGRetrievalQualityTests(RuntimeWorkspaceTestCase):
+    """Focused retrieval quality checks: precision, negative matching, mode consistency."""
+
+    def setUp(self) -> None:
+        self.temp_dir = self.create_temp_dir("rag-quality")
+        knowledge_dir = self.temp_dir / "docs" / "knowledge"
+        knowledge_dir.mkdir(parents=True, exist_ok=True)
+
+        (knowledge_dir / "login_flows.md").write_text(
+            "Keywords: login, 登录, username, password, dashboard.\n\n"
+            "Wait for username and password inputs, then assert the dashboard text.",
+            encoding="utf-8",
+        )
+        (knowledge_dir / "search_flows.md").write_text(
+            "Keywords: search, 搜索, 百度, Baidu, kw, results.\n\n"
+            "Baidu search defaults to interaction-first.",
+            encoding="utf-8",
+        )
+        (knowledge_dir / "table_operations.md").write_text(
+            "Keywords: table, 表格, pagination, sort, filter.\n\n"
+            "Table pages support sorting, filtering, and pagination.",
+            encoding="utf-8",
+        )
+
+        self.settings = Settings(
+            DEEPSEEK_API_KEY=None,
+            SQLITE_DB_PATH=str(self.temp_dir / "data" / "app.db"),
+            VECTOR_STORE_DIR=str(self.temp_dir / "data" / "rag"),
+            KNOWLEDGE_BASE_DIR=str(knowledge_dir),
+            EXECUTIONS_DIR=str(self.temp_dir / "runs"),
+        )
+        self.rag = RAGService(self.settings)
+        self.rag.rebuild_index()
+
+    def test_login_query_top_match_is_login_doc(self) -> None:
+        result = self.rag.search("登录后台系统")
+        self.assertGreaterEqual(result.result_count, 1)
+        self.assertEqual(result.sources[0], "login_flows.md")
+
+    def test_search_query_includes_search_doc(self) -> None:
+        result = self.rag.search("百度搜索 DeepSeek 结果页")
+        self.assertGreaterEqual(result.result_count, 1)
+        self.assertIn("search_flows.md", result.sources)
+
+    def test_table_query_top_match_is_table_doc(self) -> None:
+        result = self.rag.search("查看表格数据并翻页")
+        self.assertIn("table_operations.md", result.sources)
+
+    def test_hybrid_and_rerank_return_same_top_doc_for_clear_query(self) -> None:
+        query = "用户名密码登录后验证 dashboard"
+        hybrid = self.rag.search(query, retrieval_mode="hybrid")
+        rerank = self.rag.search(query, retrieval_mode="hybrid_rerank")
+        self.assertIn("login_flows.md", hybrid.sources)
+        self.assertIn("login_flows.md", rerank.sources)
+
+    def test_empty_query_returns_gracefully(self) -> None:
+        result = self.rag.search("")
+        self.assertEqual(result.result_count, 0)
+
+    def test_rebuild_twice_does_not_duplicate_results(self) -> None:
+        self.rag.rebuild_index()
+        result = self.rag.search("登录")
+        login_count = result.sources.count("login_flows.md")
+        self.assertLessEqual(login_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

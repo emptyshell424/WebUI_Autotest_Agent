@@ -1,14 +1,14 @@
-import test from 'node:test'
-import assert from 'node:assert/strict'
-
+import { describe, it, expect } from 'vitest'
 import { buildExecutionOutput, resolveTagType } from './workbench.js'
 
 const t = (key) => key
 
-test('workbench helper resolves tag and output', () => {
-  assert.equal(resolveTagType('completed'), 'success')
-  assert.equal(resolveTagType('failed'), 'danger')
-  const output = buildExecutionOutput({ logs: 'ok', error: 'boom' }, t)
-  assert.match(output, /\[STDERR\]/)
-  assert.match(output, /boom/)
+describe('workbench helpers', () => {
+  it('resolves tag and output', () => {
+    expect(resolveTagType('completed')).toBe('success')
+    expect(resolveTagType('failed')).toBe('danger')
+    const output = buildExecutionOutput({ logs: 'ok', error: 'boom' }, t)
+    expect(output).toMatch(/\[STDERR\]/)
+    expect(output).toMatch(/boom/)
+  })
 })

@@ -1,4 +1,5 @@
-﻿import re
+﻿import logging
+import re
 
 from app.core.exceptions import AppError
 from app.repositories import TestCaseRepository
@@ -11,6 +12,8 @@ from app.services.strategy_service import (
     StrategyService,
 )
 from app.utils.code_parser import clean_code
+
+logger = logging.getLogger("autotest.generation")
 
 OPEN_TERMS = ("打开", "访问", "进入", "open", "visit")
 LOGIN_TERMS = ("登录", "登入", "登陆", "login", "sign in", "log in")

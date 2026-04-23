@@ -112,12 +112,9 @@
           <p class="section-hint">{{ latestRepairAttempt.repair_summary || t('workbench.repairRetryFallback') }}</p>
         </div>
 
-        <el-input
+        <CodeEditor
           v-model="editedCode"
-          type="textarea"
           :rows="18"
-          resize="none"
-          class="code-editor"
           :placeholder="t('workbench.editorPlaceholder')"
         />
       </section>
@@ -218,6 +215,7 @@ import { MagicStick, RefreshRight, VideoPlay } from '@element-plus/icons-vue'
 import { useI18n } from '../i18n'
 import { useWorkspaceStore } from '../stores/workspace'
 import { buildExecutionOutput, resolveTagType } from '../view-models/workbench'
+import CodeEditor from '../components/CodeEditor.vue'
 
 const workspaceStore = useWorkspaceStore()
 const { t } = useI18n()
