@@ -22,6 +22,12 @@ SELF_HEAL_STRATEGY_COLUMNS = {
     "fallback_reason": "TEXT",
     "site_profile": "TEXT",
 }
+SELF_HEAL_DIAGNOSTIC_COLUMNS = {
+    "failure_type": "TEXT",
+    "failure_signal": "TEXT",
+    "suspected_root_cause": "TEXT",
+    "repair_hint": "TEXT",
+}
 
 
 def utc_now_iso() -> str:
@@ -91,6 +97,10 @@ def initialize_database(settings: Settings) -> None:
                 attempt_number INTEGER NOT NULL,
                 status TEXT NOT NULL,
                 failure_reason TEXT,
+                failure_type TEXT,
+                failure_signal TEXT,
+                suspected_root_cause TEXT,
+                repair_hint TEXT,
                 repair_summary TEXT,
                 original_code TEXT NOT NULL,
                 repaired_code TEXT,
@@ -119,6 +129,7 @@ def initialize_database(settings: Settings) -> None:
         _ensure_columns(connection, "test_case", TEST_CASE_STRATEGY_COLUMNS)
         _ensure_columns(connection, "execution_record", EXECUTION_STRATEGY_COLUMNS)
         _ensure_columns(connection, "self_heal_attempt", SELF_HEAL_STRATEGY_COLUMNS)
+        _ensure_columns(connection, "self_heal_attempt", SELF_HEAL_DIAGNOSTIC_COLUMNS)
 
 
 def _ensure_columns(

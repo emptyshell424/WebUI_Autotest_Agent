@@ -4,6 +4,7 @@ from openai import OpenAI
 
 from app.core.config import Settings
 from app.core.exceptions import AppError
+from app.services.failure_diagnostic_service import FailureDiagnosis
 from app.services.strategy_service import RepairStrategyDecision, StrategyContext
 
 
@@ -69,6 +70,7 @@ class LLMService:
         logs: str,
         context: str,
         strategy_decision: RepairStrategyDecision,
+        failure_diagnosis: FailureDiagnosis | None = None,
         repair_guidance: str = "",
     ) -> str:
         repair_guidance_block = (
@@ -77,10 +79,20 @@ class LLMService:
             if repair_guidance
             else ""
         )
+        diagnosis_block = (
+            "Failure diagnosis:\n"
+            f"- failure_type: {failure_diagnosis.failure_type}\n"
+            f"- failure_signal: {failure_diagnosis.failure_signal}\n"
+            f"- suspected_root_cause: {failure_diagnosis.suspected_root_cause}\n"
+            f"- repair_hint: {failure_diagnosis.repair_hint}\n\n"
+            if failure_diagnosis is not None
+            else ""
+        )
         repair_prompt = (
             "Original user request:\n"
             f"{prompt}\n\n"
             f"{self._render_repair_strategy_context(strategy_decision)}\n\n"
+            f"{diagnosis_block}"
             "Retrieved knowledge:\n"
             f"{context or 'No additional indexed knowledge was retrieved.'}\n\n"
             f"{repair_guidance_block}"

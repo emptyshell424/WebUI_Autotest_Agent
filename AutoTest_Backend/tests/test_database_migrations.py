@@ -99,6 +99,10 @@ class DatabaseMigrationTests(RuntimeWorkspaceTestCase):
         self.assertIn("strategy_after", self_heal_columns)
         self.assertIn("fallback_reason", self_heal_columns)
         self.assertIn("site_profile", self_heal_columns)
+        self.assertIn("failure_type", self_heal_columns)
+        self.assertIn("failure_signal", self_heal_columns)
+        self.assertIn("suspected_root_cause", self_heal_columns)
+        self.assertIn("repair_hint", self_heal_columns)
 
 
 if __name__ == "__main__":

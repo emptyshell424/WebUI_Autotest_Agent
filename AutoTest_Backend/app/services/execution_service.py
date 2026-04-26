@@ -10,6 +10,8 @@ from pathlib import Path
 from app.core.config import Settings
 from app.core.exceptions import AppError
 from app.repositories import ExecutionRepository, TestCaseRepository
+from app.services.agent_memory_service import AgentMemoryService
+from app.services.failure_diagnostic_service import FailureDiagnosticService
 from app.services.llm_service import LLMService
 from app.services.strategy_service import StrategyService
 from app.utils.code_parser import clean_code
@@ -104,12 +106,15 @@ class ExecutionService:
         test_case_repository: TestCaseRepository,
         llm_service: LLMService,
         strategy_service: StrategyService,
+        agent_memory_service: AgentMemoryService | None = None,
     ) -> None:
         self.settings = settings
         self.execution_repository = execution_repository
         self.test_case_repository = test_case_repository
         self.llm_service = llm_service
         self.strategy_service = strategy_service
+        self.agent_memory_service = agent_memory_service or AgentMemoryService(settings)
+        self.failure_diagnostic_service = FailureDiagnosticService()
         self._cancel_tokens: dict[str, _CancelToken] = {}
 
     def create_execution(self, *, test_case_id: str, code_override: str | None = None):
@@ -341,10 +346,19 @@ class ExecutionService:
                 current_result.logs,
             )
             repair_guidance = self.strategy_service.build_repair_guidance(strategy_decision)
+            failure_diagnosis = self.failure_diagnostic_service.diagnose(
+                error=current_result.error,
+                logs=current_result.logs,
+                validation_errors=current_result.validation_errors,
+            )
             attempt = self.execution_repository.create_self_heal_attempt(
                 execution_id=execution_id,
                 attempt_number=attempt_number,
                 failure_reason=current_result.error or current_result.logs,
+                failure_type=failure_diagnosis.failure_type,
+                failure_signal=failure_diagnosis.failure_signal,
+                suspected_root_cause=failure_diagnosis.suspected_root_cause,
+                repair_hint=failure_diagnosis.repair_hint,
                 repair_summary=repair_summary,
                 original_code=current_code,
                 strategy_before=strategy_decision.strategy_before,
@@ -362,6 +376,7 @@ class ExecutionService:
                         logs=current_result.logs,
                         context=rag_context,
                         strategy_decision=strategy_decision,
+                        failure_diagnosis=failure_diagnosis,
                         repair_guidance=repair_guidance,
                     )
                 ).strip()
@@ -461,6 +476,7 @@ class ExecutionService:
                     fallback_reason=current_fallback_reason,
                     site_profile=current_site_profile,
                 )
+                self._record_agent_memory(execution_id=execution_id, prompt=prompt)
                 return "healed_completed"
 
         self.execution_repository.mark_finished(
@@ -476,6 +492,32 @@ class ExecutionService:
             site_profile=current_site_profile,
         )
         return "healed_failed"
+
+    def _record_agent_memory(self, *, execution_id: str, prompt: str) -> None:
+        try:
+            execution = self.execution_repository.get(execution_id)
+            if execution is None or not execution.self_heal_attempts:
+                return
+            test_case = self.test_case_repository.get(execution.test_case_id)
+            if test_case is None:
+                return
+            completed_attempts = [
+                attempt for attempt in execution.self_heal_attempts if attempt.status == "completed"
+            ]
+            if not completed_attempts:
+                return
+            self.agent_memory_service.write_healed_memory(
+                execution=execution,
+                test_case=test_case,
+                attempt=completed_attempts[-1],
+            )
+        except Exception:
+            logger.warning(
+                "Failed to write agent memory for healed execution %s prompt=%r",
+                execution_id,
+                prompt,
+                exc_info=True,
+            )
 
     def _execute_script(
         self,
@@ -604,4 +646,3 @@ class ExecutionService:
         if "iframe" in combined or "frame" in combined:
             return "Retried with frame-aware Selenium interactions."
         return "Retried with a repaired Selenium script based on the recorded runtime failure."
-

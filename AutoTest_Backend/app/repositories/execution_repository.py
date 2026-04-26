@@ -353,6 +353,10 @@ class ExecutionRepository:
         strategy_after: str,
         fallback_reason: str | None,
         site_profile: str | None,
+        failure_type: str | None = None,
+        failure_signal: str | None = None,
+        suspected_root_cause: str | None = None,
+        repair_hint: str | None = None,
     ) -> SelfHealAttemptRecord:
         record = SelfHealAttemptRecord(
             id=str(uuid.uuid4()),
@@ -360,6 +364,10 @@ class ExecutionRepository:
             attempt_number=attempt_number,
             status="queued",
             failure_reason=failure_reason,
+            failure_type=failure_type,
+            failure_signal=failure_signal,
+            suspected_root_cause=suspected_root_cause,
+            repair_hint=repair_hint,
             repair_summary=repair_summary,
             original_code=original_code,
             repaired_code=None,
@@ -380,11 +388,12 @@ class ExecutionRepository:
             connection.execute(
                 """
                 INSERT INTO self_heal_attempt (
-                    id, execution_id, attempt_number, status, failure_reason, repair_summary,
+                    id, execution_id, attempt_number, status, failure_reason,
+                    failure_type, failure_signal, suspected_root_cause, repair_hint, repair_summary,
                     original_code, repaired_code, logs, error, validation_errors, run_directory,
                     script_path, created_at, started_at, finished_at,
                     strategy_before, strategy_after, fallback_reason, site_profile
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.id,
@@ -392,6 +401,10 @@ class ExecutionRepository:
                     record.attempt_number,
                     record.status,
                     record.failure_reason,
+                    record.failure_type,
+                    record.failure_signal,
+                    record.suspected_root_cause,
+                    record.repair_hint,
                     record.repair_summary,
                     record.original_code,
                     record.repaired_code,
@@ -497,6 +510,10 @@ class ExecutionRepository:
                     attempt_number,
                     status,
                     failure_reason,
+                    failure_type,
+                    failure_signal,
+                    suspected_root_cause,
+                    repair_hint,
                     repair_summary,
                     original_code,
                     repaired_code,
@@ -669,4 +686,3 @@ class ExecutionRepository:
             "blocked_count": point.blocked_count,
             "final_success_rate": point.final_success_rate,
         }
-

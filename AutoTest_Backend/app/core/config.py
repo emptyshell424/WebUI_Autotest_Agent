@@ -48,6 +48,10 @@ class Settings(BaseSettings):
         return self.backend_root / self.KNOWLEDGE_BASE_DIR
 
     @property
+    def agent_memory_dir(self) -> Path:
+        return self.knowledge_base_dir / "agent_memory"
+
+    @property
     def executions_dir(self) -> Path:
         return self.backend_root / self.EXECUTIONS_DIR
 

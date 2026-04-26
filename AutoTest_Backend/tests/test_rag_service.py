@@ -15,27 +15,35 @@ class RAGServiceTests(RuntimeWorkspaceTestCase):
 
         (knowledge_dir / "login_flows.md").write_text(
             """
-Keywords: login, 登录, username, password, dashboard, admin.
+Keywords: login, 登录, username, password, dashboard, admin, vue-admin-template.
 
-Wait for the username and password inputs, then assert the dashboard text name: admin after login.
+Wait for the username and password inputs, click Login, then assert the dashboard text `name: admin` or route `/dashboard`.
 
-登录后应断言 dashboard 或 `name: admin`，而不是只断言点击成功。
+中文登录需求必须执行完整登录流程，不能只断言点击成功。登录后应验证 Dashboard 或 `name: admin`。
             """.strip(),
             encoding="utf-8",
         )
         (knowledge_dir / "vue_admin_template_patterns.md").write_text(
             """
-Keywords: vue-admin-template, Dashboard, Table, Form, Create.
+Keywords: vue-admin-template, 登录, Dashboard, Example/Table, Table, 表格, Title, Author, Pageviews, Status, Form, Create, name: admin.
 
-The dashboard page shows name: admin. The Form page contains Activity name and a Create button.
+The dashboard page shows `name: admin`. The Example/Table route is `/example/table`.
 
-Form 页面包含 Activity name 和 Create 按钮。
+Example/Table uses Element UI Table and should expose table headers `Title`, `Author`, `Pageviews`, and `Status`.
+            """.strip(),
+            encoding="utf-8",
+        )
+        (knowledge_dir / "element_ui_form_table_patterns.md").write_text(
+            """
+Keywords: element ui, table, 表格, el-table, el-table__header, loading, Title, Author, Pageviews, Status.
+
+For Element UI tables, wait for `.el-table`, wait until loading finishes, then assert header text and at least one row.
             """.strip(),
             encoding="utf-8",
         )
         (knowledge_dir / "safe_code_generation_rules.md").write_text(
             """
-Keywords: safe import, sys, os, subprocess, urllib, quote_plus.
+Keywords: safe import, 安全, sys, os, subprocess, urllib, quote_plus.
 
 Do not import sys, os, subprocess, or pathlib in ordinary Selenium UI tests. If a search-results URL must be built safely during repair, urllib.parse.quote_plus is allowed.
 
@@ -45,9 +53,9 @@ Do not import sys, os, subprocess, or pathlib in ordinary Selenium UI tests. If 
         )
         (knowledge_dir / "bilingual_ui_prompt_patterns.md").write_text(
             """
-Keywords: 中文 prompt, 登录, 搜索, 点击, 验证.
+Keywords: 中文 prompt, 登录, 搜索, 点击, 验证, 表格, 表单.
 
-对于中文 prompt，应把“验证进入首页”映射为稳定页面锚点断言。
+对于中文 prompt，应把“验证进入首页”映射为稳定页面锚点断言，把“验证表格列”映射为表头文本断言。
             """.strip(),
             encoding="utf-8",
         )
@@ -73,13 +81,24 @@ If the homepage search anchors such as kw or input[name='wd'] time out during se
         self.rag.rebuild_index()
 
     def test_chinese_login_prompt_matches_login_docs(self) -> None:
-        result = self.rag.search(
-            "打开登录页面，输入用户名 admin 和密码 111111，并验证进入 Dashboard 页面。"
-        )
+        result = self.rag.search("打开登录页面，输入用户名 admin 和密码 111111，并验证进入 Dashboard 页面。")
         self.assertGreaterEqual(result.result_count, 1)
         self.assertIn("login_flows.md", result.sources)
         self.assertIn("name: admin", result.context)
         self.assertEqual(result.retrieval_mode, "hybrid_rerank")
+
+    def test_vue_admin_dashboard_prompt_hits_login_knowledge(self) -> None:
+        result = self.rag.search("登录 vue-admin-template 后验证 Dashboard")
+        self.assertIn("login_flows.md", result.sources)
+        self.assertIn("vue_admin_template_patterns.md", result.sources)
+        self.assertIn("Dashboard", result.context)
+
+    def test_vue_admin_table_prompt_hits_table_knowledge(self) -> None:
+        result = self.rag.search("打开 Example/Table 页面并验证表格列")
+        self.assertIn("vue_admin_template_patterns.md", result.sources)
+        self.assertIn("element_ui_form_table_patterns.md", result.sources)
+        for expected_header in ("Title", "Author", "Pageviews", "Status"):
+            self.assertIn(expected_header, result.context)
 
     def test_form_prompt_matches_vue_admin_template_patterns(self) -> None:
         result = self.rag.search("进入 Form 页面，填写 Activity name，然后点击 Create 按钮。")
@@ -108,18 +127,10 @@ If the homepage search anchors such as kw or input[name='wd'] time out during se
         self.assertGreaterEqual(result.result_count, 1)
 
     def test_explicit_modes_return_mode_flag(self) -> None:
-        vector_result = self.rag.search(
-            "进入 Form 页面，填写 Activity name，然后点击 Create 按钮。",
-            retrieval_mode="vector",
-        )
-        hybrid_result = self.rag.search(
-            "进入 Form 页面，填写 Activity name，然后点击 Create 按钮。",
-            retrieval_mode="hybrid",
-        )
-        rerank_result = self.rag.search(
-            "进入 Form 页面，填写 Activity name，然后点击 Create 按钮。",
-            retrieval_mode="hybrid_rerank",
-        )
+        query = "进入 Form 页面，填写 Activity name，然后点击 Create 按钮。"
+        vector_result = self.rag.search(query, retrieval_mode="vector")
+        hybrid_result = self.rag.search(query, retrieval_mode="hybrid")
+        rerank_result = self.rag.search(query, retrieval_mode="hybrid_rerank")
 
         self.assertEqual(vector_result.retrieval_mode, "vector")
         self.assertEqual(hybrid_result.retrieval_mode, "hybrid")
@@ -192,6 +203,46 @@ class RAGRetrievalQualityTests(RuntimeWorkspaceTestCase):
         result = self.rag.search("登录")
         login_count = result.sources.count("login_flows.md")
         self.assertLessEqual(login_count, 1)
+
+    def test_rebuild_indexes_agent_memory_subdirectory(self) -> None:
+        memory_dir = self.settings.agent_memory_dir
+        memory_dir.mkdir(parents=True, exist_ok=True)
+        (memory_dir / "baidu-timeout.md").write_text(
+            """
+Keywords: agent_memory, self-heal, healed_completed, baidu, TimeoutException, kw, baidu.com/s?wd=.
+
+## 场景
+Open Baidu and search for DeepSeek.
+
+## 失败类型
+wait_timeout
+
+## 失败信号
+TimeoutException waiting for kw.
+
+## 根因
+Homepage search input anchor was unavailable.
+
+## 修复动作
+Downgrade to direct Baidu results page URL.
+
+## 稳定选择器
+- url=https://www.baidu.com/s?wd=DeepSeek
+
+## 验证规则
+- assert `baidu.com/s?wd=` in url
+            """.strip(),
+            encoding="utf-8",
+        )
+
+        self.rag.rebuild_index()
+        result = self.rag.search(
+            "Baidu kw TimeoutException direct results page DeepSeek",
+            n_results=5,
+        )
+
+        self.assertIn("agent_memory/baidu-timeout.md", result.sources)
+        self.assertIn("wait_timeout", result.context)
 
 
 if __name__ == "__main__":

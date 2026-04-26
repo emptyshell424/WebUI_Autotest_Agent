@@ -47,6 +47,10 @@ class SelfHealAttemptRecord:
     attempt_number: int
     status: str
     failure_reason: str | None
+    failure_type: str | None
+    failure_signal: str | None
+    suspected_root_cause: str | None
+    repair_hint: str | None
     repair_summary: str | None
     original_code: str
     repaired_code: str | None

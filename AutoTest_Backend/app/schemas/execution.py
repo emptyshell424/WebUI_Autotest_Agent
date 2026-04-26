@@ -12,6 +12,10 @@ class SelfHealAttemptRead(BaseModel):
     attempt_number: int
     status: str
     failure_reason: str | None = None
+    failure_type: str | None = None
+    failure_signal: str | None = None
+    suspected_root_cause: str | None = None
+    repair_hint: str | None = None
     repair_summary: str | None = None
     original_code: str
     repaired_code: str | None = None

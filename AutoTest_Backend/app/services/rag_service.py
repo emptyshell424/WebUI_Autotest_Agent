@@ -22,8 +22,8 @@ TERM_ALIASES = {
     "dashboard": ["dashboard", "首页", "后台首页", "控制台"],
     "table": ["表格", "table"],
     "form": ["表单", "form"],
-    "create": ["创建", "create", "新建"],
-    "search": ["搜索", "搜寻", "查询", "search"],
+    "create": ["创建", "新建", "提交", "create"],
+    "search": ["搜索", "搜寻", "检索", "查询", "search"],
     "search_input": [
         "搜索框",
         "search input",
@@ -74,7 +74,7 @@ TERM_ALIASES = {
 CANONICAL_EXPANSIONS = {
     "login": ["username", "password", "dashboard", "post login", "admin"],
     "dashboard": ["name admin", "post login anchor", "home page"],
-    "table": ["example table", "title", "author", "pageviews", "table header"],
+    "table": ["example table", "title", "author", "pageviews", "status", "table header", "element ui table"],
     "form": ["activity name", "activity zone", "create", "submit", "element ui form"],
     "create": ["submit", "success message", "button"],
     "search": [
@@ -87,7 +87,13 @@ CANONICAL_EXPANSIONS = {
     ],
     "search_input": ["search input", "keyword input", "input", "query field", "kw", "input[name='wd']"],
     "baidu": ["baidu home page", "results", "result container", "baidu.com/s?wd=", "baidu search"],
-    "results_page": ["results page", "result container", "search results", "stable results container", "#content_left"],
+    "results_page": [
+        "results page",
+        "result container",
+        "search results",
+        "stable results container",
+        "#content_left",
+    ],
     "verify": ["assert", "verify", "visible text", "result anchor", "stable assertion"],
     "message": ["toast", "success text", "feedback"],
     "click": ["button", "click", "submit", "element_to_be_clickable"],
@@ -112,12 +118,48 @@ def _build_query_expansion_rules() -> dict[str, list[str]]:
 QUERY_EXPANSION_RULES = _build_query_expansion_rules()
 
 SOURCE_HINTS = {
-    "login_flows": TERM_ALIASES["login"] + ["username", "password", "dashboard", "/login", "admin"] + TERM_ALIASES["dashboard"],
-    "vue_admin_template_patterns": ["vue-admin-template", "dashboard", "table", "form", "create", "submit", "name admin", "example"] + TERM_ALIASES["login"] + TERM_ALIASES["table"] + TERM_ALIASES["form"],
+    "login_flows": TERM_ALIASES["login"]
+    + TERM_ALIASES["dashboard"]
+    + ["username", "password", "dashboard", "/login", "admin"],
+    "vue_admin_template_patterns": [
+        "vue-admin-template",
+        "dashboard",
+        "table",
+        "form",
+        "create",
+        "submit",
+        "name admin",
+        "example",
+        "example/table",
+        "title",
+        "author",
+        "pageviews",
+        "status",
+    ]
+    + TERM_ALIASES["login"]
+    + TERM_ALIASES["table"]
+    + TERM_ALIASES["form"],
     "safe_code_generation_rules": TERM_ALIASES["safe"],
-    "bilingual_ui_prompt_patterns": TERM_ALIASES["login"] + TERM_ALIASES["search"] + TERM_ALIASES["click"] + TERM_ALIASES["verify"] + TERM_ALIASES["message"] + TERM_ALIASES["table"] + TERM_ALIASES["form"] + ["中文", "english"],
-    "element_ui_form_table_patterns": TERM_ALIASES["form"] + TERM_ALIASES["table"] + TERM_ALIASES["create"] + TERM_ALIASES["message"] + ["element ui", "activity name", "activity zone"],
-    "search_flows": TERM_ALIASES["search"] + TERM_ALIASES["search_input"] + TERM_ALIASES["baidu"] + TERM_ALIASES["results_page"] + TERM_ALIASES["print_completed"] + TERM_ALIASES["homepage_search"] + TERM_ALIASES["homepage_timeout"],
+    "bilingual_ui_prompt_patterns": TERM_ALIASES["login"]
+    + TERM_ALIASES["search"]
+    + TERM_ALIASES["click"]
+    + TERM_ALIASES["verify"]
+    + TERM_ALIASES["message"]
+    + TERM_ALIASES["table"]
+    + TERM_ALIASES["form"]
+    + ["中文", "english"],
+    "element_ui_form_table_patterns": TERM_ALIASES["form"]
+    + TERM_ALIASES["table"]
+    + TERM_ALIASES["create"]
+    + TERM_ALIASES["message"]
+    + ["element ui", "activity name", "activity zone", "el-table", "table header"],
+    "search_flows": TERM_ALIASES["search"]
+    + TERM_ALIASES["search_input"]
+    + TERM_ALIASES["baidu"]
+    + TERM_ALIASES["results_page"]
+    + TERM_ALIASES["print_completed"]
+    + TERM_ALIASES["homepage_search"]
+    + TERM_ALIASES["homepage_timeout"],
 }
 
 STOPWORDS = {
@@ -190,25 +232,24 @@ class RAGService:
         documents: list[str] = []
         ids: list[str] = []
         metadatas: list[dict[str, str]] = []
-        chunk_count = 0
         indexed_documents: list[RAGDocument] = []
 
         for file_path in files:
-            chunks = self._split_document(file_path.read_text(encoding="utf-8"))
+            source = file_path.relative_to(self.settings.knowledge_base_dir).as_posix()
+            chunks = self._split_document(file_path.read_text(encoding="utf-8"), source=source)
             for index, chunk in enumerate(chunks):
                 documents.append(chunk)
-                ids.append(f"{file_path.stem}-{index}")
-                metadata = {"source": file_path.name, "source_stem": file_path.stem}
+                ids.append(f"{re.sub(r'[^a-zA-Z0-9_.:-]+', '_', source)}-{index}")
+                metadata = {"source": source, "source_stem": file_path.stem}
                 metadatas.append(metadata)
                 indexed_documents.append(
                     RAGDocument(
                         document=chunk,
-                        source=file_path.name,
+                        source=source,
                         source_stem=file_path.stem,
                         tokens=tuple(self._tokenize_for_bm25(chunk)),
                     )
                 )
-            chunk_count += len(chunks)
 
         self._documents = indexed_documents
 
@@ -221,7 +262,7 @@ class RAGService:
         return {
             "ready": bool(documents),
             "document_count": len(files),
-            "chunk_count": chunk_count,
+            "chunk_count": len(documents),
             "collection_name": self.collection_name,
             "backend": "chromadb" if self._uses_vector_store else "fallback",
         }
@@ -564,11 +605,14 @@ class RAGService:
     def _knowledge_files(self) -> list[Path]:
         if not self.settings.knowledge_base_dir.exists():
             return []
-        files = sorted(self.settings.knowledge_base_dir.glob("*.md"))
-        files.extend(sorted(self.settings.knowledge_base_dir.glob("*.txt")))
+        files = sorted(self.settings.knowledge_base_dir.rglob("*.md"))
+        files.extend(sorted(self.settings.knowledge_base_dir.rglob("*.txt")))
         return files
 
-    def _split_document(self, text: str) -> list[str]:
+    def _split_document(self, text: str, *, source: str = "") -> list[str]:
+        if source.startswith("agent_memory/"):
+            stripped = text.strip()
+            return [stripped] if stripped else []
         normalized = text.replace("\r\n", "\n")
         chunks = [chunk.strip() for chunk in normalized.split("\n\n") if chunk.strip()]
         if len(chunks) > 1 and chunks[0].startswith("Keywords:"):

@@ -8,6 +8,7 @@ from app.core.database import initialize_database
 from app.core.container import create_container
 from app.repositories import ExecutionRepository, TestCaseRepository
 from app.services.execution_service import ExecutionService, _CancelToken
+from app.services.rag_service import RAGService
 from app.services.strategy_service import StrategyService
 
 
@@ -99,7 +100,41 @@ class SelfHealFlowTests(RuntimeWorkspaceTestCase):
         self.assertEqual(saved.effective_strategy, "interaction_first")
         self.assertEqual(saved.self_heal_attempts[0].strategy_before, "interaction_first")
         self.assertEqual(saved.self_heal_attempts[0].strategy_after, "interaction_first")
+        self.assertEqual(saved.self_heal_attempts[0].failure_type, "unknown_failure")
+        self.assertTrue(saved.self_heal_attempts[0].failure_signal)
+        self.assertTrue(saved.self_heal_attempts[0].suspected_root_cause)
+        self.assertTrue(saved.self_heal_attempts[0].repair_hint)
+        self.assertEqual(
+            llm.last_kwargs.get("failure_diagnosis").failure_type,
+            saved.self_heal_attempts[0].failure_type,
+        )
         self.assertEqual(llm.last_kwargs.get("repair_guidance"), "")
+
+        memory_files = list(self.settings.agent_memory_dir.glob("*.md"))
+        self.assertEqual(len(memory_files), 1)
+        memory_card = memory_files[0].read_text(encoding="utf-8")
+        for heading in (
+            "## 场景",
+            "## 失败类型",
+            "## 失败信号",
+            "## 根因",
+            "## 修复动作",
+            "## 稳定选择器",
+            "## 验证规则",
+        ):
+            self.assertIn(heading, memory_card)
+        self.assertIn("Open page and verify success message", memory_card)
+        self.assertIn("unknown_failure", memory_card)
+        self.assertIn("Test Completed", memory_card)
+
+        rag = RAGService(self.settings)
+        rag.rebuild_index()
+        result = rag.search(
+            "Open page verify success message RuntimeError boom repaired Test Completed",
+            n_results=5,
+        )
+        self.assertIn(f"agent_memory/{memory_files[0].name}", result.sources)
+        self.assertIn("## 修复动作", result.context)
 
     def test_self_heal_switches_baidu_homepage_timeout_to_results_page_flow(self) -> None:
         original_code = (
@@ -157,6 +192,13 @@ class SelfHealFlowTests(RuntimeWorkspaceTestCase):
         self.assertIn("quote_plus", llm.last_kwargs.get("repair_guidance", ""))
         self.assertIn("interaction_first to result_first", llm.last_kwargs.get("repair_guidance", ""))
         self.assertEqual(llm.last_kwargs["strategy_decision"].strategy_after, "result_first")
+        self.assertEqual(llm.last_kwargs["failure_diagnosis"].failure_type, "wait_timeout")
+
+        memory_files = list(self.settings.agent_memory_dir.glob("*.md"))
+        self.assertEqual(len(memory_files), 1)
+        memory_card = memory_files[0].read_text(encoding="utf-8")
+        self.assertIn("wait_timeout", memory_card)
+        self.assertIn("baidu.com/s?wd=", memory_card)
 
     def test_self_heal_still_respects_safety_validation(self) -> None:
         case = self._create_case(
