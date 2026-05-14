@@ -16,7 +16,7 @@ TERMINAL_EXECUTION_STATUSES = (
 SELF_HEAL_TERMINAL_STATUSES = ('healed_completed', 'healed_failed')
 
 VALID_EXECUTION_TRANSITIONS: dict[str, set[str]] = {
-    'queued': {'running', 'failed', 'cancelled'},
+    'queued': {'running', 'failed', 'cancelled', 'blocked'},
     'running': {'completed', 'failed', 'blocked', 'healed_completed', 'healed_failed', 'cancelled'},
     'blocked': set(),
     'completed': set(),

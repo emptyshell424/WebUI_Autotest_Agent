@@ -108,7 +108,7 @@ class SelfHealFlowTests(RuntimeWorkspaceTestCase):
             llm.last_kwargs.get("failure_diagnosis").failure_type,
             saved.self_heal_attempts[0].failure_type,
         )
-        self.assertEqual(llm.last_kwargs.get("repair_guidance"), "")
+        self.assertTrue(llm.last_kwargs.get("repair_guidance"))  # adaptive strategy always produces guidance
 
         memory_files = list(self.settings.agent_memory_dir.glob("*.md"))
         self.assertEqual(len(memory_files), 1)
@@ -191,7 +191,7 @@ class SelfHealFlowTests(RuntimeWorkspaceTestCase):
         self.assertIn("baidu.com/s?wd=", saved.self_heal_attempts[0].repaired_code or "")
         self.assertIn("quote_plus", llm.last_kwargs.get("repair_guidance", ""))
         self.assertIn("interaction_first to result_first", llm.last_kwargs.get("repair_guidance", ""))
-        self.assertEqual(llm.last_kwargs["strategy_decision"].strategy_after, "result_first")
+        self.assertIn("strategy_after: result_first", str(llm.last_kwargs["repair_strategy_block"]))
         self.assertEqual(llm.last_kwargs["failure_diagnosis"].failure_type, "wait_timeout")
 
         memory_files = list(self.settings.agent_memory_dir.glob("*.md"))

@@ -5,11 +5,13 @@ from app.core.exceptions import AppError
 from app.repositories import TestCaseRepository
 from app.services.llm_service import LLMService
 from app.services.rag_service import RAGService
+from app.services.site_profile_service import SiteProfileService
 from app.services.strategy_service import (
     RESULT_FIRST,
     SITE_PROFILE_BAIDU_SEARCH,
     StrategyContext,
     StrategyService,
+    VUE_ADMIN_CRITICAL_SELECTOR_RULES,
 )
 from app.utils.code_parser import clean_code
 
@@ -25,6 +27,9 @@ ASSERT_TERMS = ("验证", "断言", "校验", "assert", "verify", "check")
 PRINT_TERMS = ("打印", "输出", "print", "测试完成", "test completed")
 
 
+_URL_RE = re.compile(r'https?://[^\s"\'\>)]+', re.IGNORECASE)
+
+
 class GenerationService:
     def __init__(
         self,
@@ -32,11 +37,13 @@ class GenerationService:
         rag_service: RAGService,
         test_case_repository: TestCaseRepository,
         strategy_service: StrategyService,
+        site_profile_service: SiteProfileService | None = None,
     ) -> None:
         self.llm_service = llm_service
         self.rag_service = rag_service
         self.test_case_repository = test_case_repository
         self.strategy_service = strategy_service
+        self.site_profile_service = site_profile_service
 
     def generate(self, prompt: str, retrieval_mode: str | None = None):
         normalized_prompt = prompt.strip()
@@ -52,13 +59,15 @@ class GenerationService:
             normalized_prompt,
             retrieval_mode=retrieval_mode,
         )
+        site_profile_block = self._get_site_profile_block(normalized_prompt)
         raw_output = self.llm_service.chat(
             self._build_augmented_prompt(
                 normalized_prompt,
                 rag_result.context,
                 strategy_context,
+                site_profile_block=site_profile_block,
             ),
-            strategy_context=strategy_context,
+            strategy_block=self.strategy_service.build_strategy_block(strategy_context),
         )
         cleaned_code = clean_code(raw_output)
         if not cleaned_code.strip():
@@ -84,6 +93,8 @@ class GenerationService:
         prompt: str,
         context: str,
         strategy_context: StrategyContext,
+        *,
+        site_profile_block: str | None = None,
     ) -> str:
         intent_hints = self._build_intent_hints(prompt, strategy_context)
         hint_block = (
@@ -92,14 +103,22 @@ class GenerationService:
             if intent_hints
             else ""
         )
+        profile_section = (
+            f"[Site Profile]\n{site_profile_block}\n\n"
+            if site_profile_block
+            else ""
+        )
         return (
             "Background knowledge:\n"
             f"{context or 'No additional indexed knowledge was retrieved.'}\n\n"
             f"{self.strategy_service.build_strategy_block(strategy_context)}\n\n"
+            f"{profile_section}"
+            f"[CRITICAL SELECTOR RULES — override all other patterns]\n{VUE_ADMIN_CRITICAL_SELECTOR_RULES}\n\n"
             "User request:\n"
             f"{prompt}\n\n"
             f"{hint_block}"
             "Output rules:\n"
+            "0. The Background knowledge above contains selector guidance verified against the actual target DOM. If it says a selector is WRONG (e.g. button[type='submit'] on Element UI pages), you MUST NOT use it even if it seems correct. If it lists CORRECT selectors, prefer those over your default patterns.\n"
             "1. Return Python Selenium code only.\n"
             "2. The user request may be written in Chinese or English. Infer the intended UI flow from the request, interpreted task hints, background knowledge, and strategy context, but still return Python code only.\n"
             "3. Use explicit waits instead of blind sleeps when possible.\n"
@@ -147,6 +166,7 @@ class GenerationService:
                 "- After the real assertion succeeds, print exactly print('Test Completed'). Do not print a translated success string before the assertion."
             )
 
+
         if strategy_context.site_profile == SITE_PROFILE_BAIDU_SEARCH:
             if strategy_context.effective_strategy == RESULT_FIRST:
                 hints.append(
@@ -166,6 +186,15 @@ class GenerationService:
 
         return "\n".join(hints)
 
+    def _get_site_profile_block(self, prompt: str) -> str:
+        """Extract target URL from *prompt* and return the profile block."""
+        if self.site_profile_service is None:
+            return ""
+        m = _URL_RE.search(prompt)
+        if not m:
+            return ""
+        return self.site_profile_service.get_profile_prompt_block(m.group(0))
+
     def _build_title(self, prompt: str) -> str:
         compact = " ".join(prompt.split())
         return compact[:60] if len(compact) > 60 else compact
@@ -174,4 +203,4 @@ class GenerationService:
         return re.sub(r"\s+", "", text).lower()
 
     def _contains_any(self, text: str, terms: tuple[str, ...]) -> bool:
-        return any(term.lower() in text for term in terms)
+        return any(self._normalize(term) in text for term in terms)

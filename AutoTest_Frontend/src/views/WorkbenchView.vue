@@ -56,6 +56,23 @@
           <el-button text :icon="RefreshRight" @click="refreshCurrentExecution" :disabled="!currentExecution">
             {{ t('workbench.refreshExecution') }}
           </el-button>
+          <el-button
+            v-if="!agentRunning"
+            type="success"
+            :icon="Cpu"
+            :disabled="!prompt?.trim()"
+            @click="handleAgentRun"
+          >
+            {{ t('agentTrace.agentRun') }}
+          </el-button>
+          <el-button
+            v-else
+            type="danger"
+            :icon="Close"
+            @click="handleAgentStop"
+          >
+            {{ t('agentTrace.agentStop') }}
+          </el-button>
         </div>
 
         <div class="inline-meta">
@@ -202,6 +219,8 @@
           {{ t('workbench.emptyTrace') }}
         </div>
       </section>
+
+      <AgentTracePanel @clear="handleAgentClear" />
     </div>
   </div>
 </template>
@@ -210,15 +229,20 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
-import { MagicStick, RefreshRight, VideoPlay } from '@element-plus/icons-vue'
+import { Close, Cpu, MagicStick, RefreshRight, VideoPlay } from '@element-plus/icons-vue'
 
 import { useI18n } from '../i18n'
 import { useWorkspaceStore } from '../stores/workspace'
+import { useAgentStore } from '../stores/agent'
 import { buildExecutionOutput, resolveTagType } from '../view-models/workbench'
 import CodeEditor from '../components/CodeEditor.vue'
+import AgentTracePanel from '../components/AgentTracePanel.vue'
 
 const workspaceStore = useWorkspaceStore()
+const agentStore = useAgentStore()
 const { t } = useI18n()
+
+const agentRunning = computed(() => agentStore.running)
 const {
   autoExecute,
   canRun,
@@ -324,6 +348,23 @@ const refreshCurrentExecution = async () => {
   } catch (error) {
     ElMessage.error(workspaceStore.lastError || t('workbench.executionRefreshFailed'))
   }
+}
+
+const handleAgentRun = () => {
+  const text = prompt.value?.trim()
+  if (!text) return
+  agentStore.startAgentRun(text)
+  ElMessage.success(t('agentTrace.agentRunStarted'))
+}
+
+const handleAgentStop = () => {
+  agentStore.stopAgentRun()
+  ElMessage.info(t('agentTrace.agentStopped'))
+}
+
+const handleAgentClear = () => {
+  agentStore.clearTrace()
+  ElMessage.info(t('agentTrace.agentCleared'))
 }
 </script>
 

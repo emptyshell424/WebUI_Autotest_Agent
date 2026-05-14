@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 FAILURE_TYPES = {
@@ -16,6 +16,7 @@ class FailureDiagnosis:
     failure_signal: str
     suspected_root_cause: str
     repair_hint: str
+    suggested_selectors: list[str] = field(default_factory=list)
 
 
 class FailureDiagnosticService:

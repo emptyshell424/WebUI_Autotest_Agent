@@ -1,6 +1,7 @@
 import ast
 import logging
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -10,9 +11,11 @@ from pathlib import Path
 from app.core.config import Settings
 from app.core.exceptions import AppError
 from app.repositories import ExecutionRepository, TestCaseRepository
+from app.services.adaptive_strategy_service import AdaptiveStrategyService
 from app.services.agent_memory_service import AgentMemoryService
-from app.services.failure_diagnostic_service import FailureDiagnosticService
+from app.services.intelligent_diagnostic_service import IntelligentDiagnosticService
 from app.services.llm_service import LLMService
+from app.services.site_profile_service import SiteProfileService
 from app.services.strategy_service import StrategyService
 from app.utils.code_parser import clean_code
 
@@ -107,6 +110,8 @@ class ExecutionService:
         llm_service: LLMService,
         strategy_service: StrategyService,
         agent_memory_service: AgentMemoryService | None = None,
+        site_profile_service: SiteProfileService | None = None,
+        rag_service=None,
     ) -> None:
         self.settings = settings
         self.execution_repository = execution_repository
@@ -114,8 +119,17 @@ class ExecutionService:
         self.llm_service = llm_service
         self.strategy_service = strategy_service
         self.agent_memory_service = agent_memory_service or AgentMemoryService(settings)
-        self.failure_diagnostic_service = FailureDiagnosticService()
+        self.site_profile_service = site_profile_service or SiteProfileService(
+            storage_dir=settings.site_profiles_dir,
+        )
+        self.rag_service = rag_service
+        self.failure_diagnostic_service = IntelligentDiagnosticService(llm_service=self.llm_service)
+        self.adaptive_strategy_service = AdaptiveStrategyService(
+            diagnostic_service=self.failure_diagnostic_service,
+            memory_service=self.agent_memory_service,
+        )
         self._cancel_tokens: dict[str, _CancelToken] = {}
+        self._cancel_tokens_lock = threading.Lock()
 
     def create_execution(self, *, test_case_id: str, code_override: str | None = None):
         if self.execution_repository.count_active() >= self.settings.MAX_CONCURRENT_EXECUTIONS:
@@ -150,7 +164,8 @@ class ExecutionService:
         self.test_case_repository.update_status(test_case_id, "queued")
 
         cancel_token = _CancelToken()
-        self._cancel_tokens[record.id] = cancel_token
+        with self._cancel_tokens_lock:
+            self._cancel_tokens[record.id] = cancel_token
 
         worker = threading.Thread(
             target=self._run_execution,
@@ -174,7 +189,8 @@ class ExecutionService:
                 status_code=409,
                 code="cancel_not_allowed",
             )
-        token = self._cancel_tokens.get(execution_id)
+        with self._cancel_tokens_lock:
+            token = self._cancel_tokens.get(execution_id)
         if token is not None:
             token.cancel()
         self.execution_repository.mark_finished(
@@ -182,7 +198,8 @@ class ExecutionService:
             status="cancelled",
             error="Execution cancelled by user.",
         )
-        self._cancel_tokens.pop(execution_id, None)
+        with self._cancel_tokens_lock:
+            self._cancel_tokens.pop(execution_id, None)
         return self.execution_repository.get(execution_id)
 
     def get_execution(self, execution_id: str):
@@ -226,7 +243,9 @@ class ExecutionService:
             except Exception:
                 logger.exception("Failed to mark execution %s as failed", execution_id)
         finally:
-            self._cancel_tokens.pop(execution_id, None)
+            self._update_site_profile(execution_id)
+            with self._cancel_tokens_lock:
+                self._cancel_tokens.pop(execution_id, None)
 
     def _run_execution_inner(
         self,
@@ -345,20 +364,27 @@ class ExecutionService:
                 current_result.error,
                 current_result.logs,
             )
-            repair_guidance = self.strategy_service.build_repair_guidance(strategy_decision)
-            failure_diagnosis = self.failure_diagnostic_service.diagnose(
+            adaptive_decision = self.adaptive_strategy_service.select_strategy(
                 error=current_result.error,
                 logs=current_result.logs,
+                code=current_code,
+                prompt=prompt,
                 validation_errors=current_result.validation_errors,
             )
+            failure_diagnosis = adaptive_decision.diagnosis
+            failure_diagnosis_legacy = failure_diagnosis.to_legacy()
+            repair_guidance = (
+                self.strategy_service.build_repair_guidance(strategy_decision)
+                + "\n\n" + adaptive_decision.combined_guidance
+            ).strip()
             attempt = self.execution_repository.create_self_heal_attempt(
                 execution_id=execution_id,
                 attempt_number=attempt_number,
                 failure_reason=current_result.error or current_result.logs,
-                failure_type=failure_diagnosis.failure_type,
-                failure_signal=failure_diagnosis.failure_signal,
-                suspected_root_cause=failure_diagnosis.suspected_root_cause,
-                repair_hint=failure_diagnosis.repair_hint,
+                failure_type=failure_diagnosis_legacy.failure_type,
+                failure_signal=failure_diagnosis_legacy.failure_signal,
+                suspected_root_cause=failure_diagnosis_legacy.suspected_root_cause,
+                repair_hint=failure_diagnosis_legacy.repair_hint,
                 repair_summary=repair_summary,
                 original_code=current_code,
                 strategy_before=strategy_decision.strategy_before,
@@ -368,16 +394,38 @@ class ExecutionService:
             )
 
             try:
+                memory_context = adaptive_decision.memory_context
+
+                site_profile_block = self.site_profile_service.get_profile_prompt_block(
+                    self._extract_target_url(prompt, current_code)
+                )
+
+                # Re-query RAG with failure context for repair-relevant knowledge
+                repair_context = rag_context
+                if self.rag_service is not None:
+                    try:
+                        failure_query = f"{current_result.error or ''}\n{current_result.logs or ''}\n{prompt}"
+                        fresh_rag = self.rag_service.search(
+                            failure_query,
+                            retrieval_mode="hybrid_rerank",
+                        )
+                        if fresh_rag and fresh_rag.context:
+                            repair_context = fresh_rag.context
+                    except Exception:
+                        pass
+
                 repaired_code = clean_code(
                     self.llm_service.repair_script(
                         prompt=prompt,
                         original_code=current_code,
                         error=current_result.error or "",
                         logs=current_result.logs,
-                        context=rag_context,
-                        strategy_decision=strategy_decision,
-                        failure_diagnosis=failure_diagnosis,
+                        context=repair_context,
+                        failure_diagnosis=failure_diagnosis_legacy,
                         repair_guidance=repair_guidance,
+                        repair_strategy_block=self.strategy_service.build_repair_strategy_block(strategy_decision),
+                        memory_context=memory_context,
+                        site_profile_block=site_profile_block,
                     )
                 ).strip()
             except AppError as exc:
@@ -516,6 +564,53 @@ class ExecutionService:
                 "Failed to write agent memory for healed execution %s prompt=%r",
                 execution_id,
                 prompt,
+                exc_info=True,
+            )
+
+    # ------------------------------------------------------------------
+    # Site-profile integration
+    # ------------------------------------------------------------------
+
+    _URL_RE = re.compile(r'https?://[^\s"\'>)]+', re.IGNORECASE)
+    _DRIVER_GET_RE = re.compile(
+        r'driver\.get\(\s*["\']([^"\']*)["\'\)]', re.IGNORECASE,
+    )
+
+    @classmethod
+    def _extract_target_url(cls, prompt: str, code: str) -> str:
+        """Best-effort extraction of the target URL from the prompt or code."""
+        # 1. Try URLs in prompt first.
+        m = cls._URL_RE.search(prompt)
+        if m:
+            return m.group(0)
+        # 2. Fall back to driver.get(...) in the executed code.
+        m = cls._DRIVER_GET_RE.search(code)
+        if m:
+            return m.group(1)
+        return ""
+
+    def _update_site_profile(self, execution_id: str) -> None:
+        """Update the site profile after an execution completes."""
+        try:
+            record = self.execution_repository.get(execution_id)
+            if record is None:
+                return
+            test_case = self.test_case_repository.get(record.test_case_id)
+            prompt = test_case.prompt if test_case else ""
+            url = self._extract_target_url(prompt, record.executed_code or "")
+            if not url:
+                return
+            self.site_profile_service.update_from_execution(
+                url=url,
+                status="success" if record.status in ("completed", "healed_completed") else "failure",
+                error=record.error or "",
+                logs=record.logs or "",
+                strategy=record.effective_strategy or "",
+            )
+        except Exception:
+            logger.warning(
+                "Failed to update site profile for execution %s",
+                execution_id,
                 exc_info=True,
             )
 

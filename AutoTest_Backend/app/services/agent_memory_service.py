@@ -1,14 +1,38 @@
 from __future__ import annotations
 
+import logging
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from app.core.config import Settings
 from app.models import ExecutionRecord, SelfHealAttemptRecord, TestCaseRecord
 
+try:
+    import chromadb  # type: ignore
+except ModuleNotFoundError:
+    chromadb = None
+
+logger = logging.getLogger("autotest.agent_memory")
+
+MEMORY_COLLECTION_NAME = "agent_memory"
+
+
+@dataclass(frozen=True, slots=True)
+class MemorySearchResult:
+    """Result from searching agent memory."""
+    cards: list[dict[str, Any]]
+    context: str  # concatenated text for LLM injection
+    result_count: int
+
 
 class AgentMemoryService:
-    """Persist successful self-heal lessons as Markdown knowledge documents."""
+    """Persist and retrieve agent learning experiences.
+
+    Write path (existing):  Markdown files in knowledge_base_dir/agent_memory/
+    Read path: ChromaDB `agent_memory` collection for similarity search.
+    """
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -114,6 +138,18 @@ class AgentMemoryService:
         rules.append("repair attempt status is `completed`")
         return self._dedupe([self._single_line(item, 180) for item in rules])
 
+    _KEYWORD_STOPWORDS: set[str] = {
+        "the", "for", "is", "to", "and", "then", "open", "wait", "page",
+        "last", "most", "recent", "call", "than", "that", "with", "from",
+        "this", "into", "after", "when", "will", "not", "are", "was", "has",
+        "its", "over", "each", "next", "once", "also", "very", "just", "can",
+        "new", "now", "one", "two", "all", "any", "get", "set", "use", "had",
+        "been", "were", "they", "have", "more", "some", "only", "what", "how",
+        "which", "your", "first", "before", "after", "above", "below", "an",
+        "or", "but", "so", "if", "no", "on", "at", "by", "be", "as", "do",
+        "in", "it", "of", "up", "out", "off", "our", "you", "we", "he", "she",
+    }
+
     def _keywords(
         self,
         prompt: str,
@@ -133,7 +169,11 @@ class AgentMemoryService:
         tokens: list[str] = []
         for item in raw:
             tokens.extend(re.findall(r"[\u4e00-\u9fff]{2,}|[a-zA-Z0-9_#./:=!-]{2,}", item))
-        return self._dedupe(tokens)[:30]
+        filtered = [
+            t for t in tokens
+            if t.lower() not in self._KEYWORD_STOPWORDS and len(t) > 2
+        ]
+        return self._dedupe(filtered)[:30]
 
     def _bullet_list(self, items: list[str], fallback: str) -> str:
         values = items or [fallback]
@@ -157,3 +197,211 @@ class AgentMemoryService:
                 seen.add(key)
                 output.append(normalized)
         return output
+
+    # ------------------------------------------------------------------
+    # ChromaDB read / retrieval
+    # ------------------------------------------------------------------
+
+    def _get_chroma_client(self):
+        """Return the ChromaDB client, or None if unavailable."""
+        if chromadb is None:
+            return None
+        return chromadb.PersistentClient(path=str(self.settings.vector_store_dir))
+
+    def _get_memory_collection(self):
+        """Get or create the agent_memory ChromaDB collection."""
+        client = self._get_chroma_client()
+        if client is None:
+            return None
+        return client.get_or_create_collection(name=MEMORY_COLLECTION_NAME)
+
+    def rebuild_memory_index(self) -> dict[str, Any]:
+        """Index all agent_memory/*.md files into the ChromaDB collection."""
+        memory_dir = self.settings.agent_memory_dir
+        if not memory_dir.exists():
+            return {"indexed": 0, "collection": MEMORY_COLLECTION_NAME}
+
+        files = sorted(memory_dir.glob("*.md"))
+        documents: list[str] = []
+        ids: list[str] = []
+        metadatas: list[dict[str, str]] = []
+
+        for fp in files:
+            text = fp.read_text(encoding="utf-8").strip()
+            if not text:
+                continue
+            doc_id = f"mem_{fp.stem}"
+            card_type = self._detect_card_type(text)
+            documents.append(text)
+            ids.append(doc_id)
+            metadatas.append({
+                "source": fp.name,
+                "card_type": card_type,
+            })
+
+        collection = self._get_memory_collection()
+        if collection is not None and documents:
+            collection.upsert(documents=documents, ids=ids, metadatas=metadatas)
+            logger.info("Indexed %d memory cards into %s", len(documents), MEMORY_COLLECTION_NAME)
+
+        return {
+            "indexed": len(documents),
+            "collection": MEMORY_COLLECTION_NAME,
+        }
+
+    def search_similar(
+        self,
+        query: str,
+        n_results: int = 3,
+        card_type: str | None = None,
+    ) -> MemorySearchResult:
+        """Search the agent_memory ChromaDB collection for similar experiences.
+
+        Args:
+            query: natural-language description of the current situation.
+            n_results: max number of memory cards to return.
+            card_type: optional filter — 'heal', 'success', or 'trap'.
+
+        Returns:
+            MemorySearchResult with matching cards and a context string.
+        """
+        collection = self._get_memory_collection()
+        if collection is None or collection.count() == 0:
+            # Try to build the index if the collection is empty
+            self.rebuild_memory_index()
+            collection = self._get_memory_collection()
+            if collection is None or collection.count() == 0:
+                return MemorySearchResult(cards=[], context="", result_count=0)
+
+        where_filter = {"card_type": card_type} if card_type else None
+        try:
+            results = collection.query(
+                query_texts=[query],
+                n_results=min(n_results, collection.count()),
+                where=where_filter,
+            )
+        except Exception:
+            logger.warning("Memory search failed", exc_info=True)
+            return MemorySearchResult(cards=[], context="", result_count=0)
+
+        cards: list[dict[str, Any]] = []
+        docs = results.get("documents", [[]])[0]
+        metas = results.get("metadatas", [[]])[0]
+        distances = results.get("distances", [[]])[0]
+
+        for i, doc in enumerate(docs):
+            meta = metas[i] if i < len(metas) else {}
+            dist = distances[i] if i < len(distances) else 0.0
+            cards.append({
+                "content": doc,
+                "source": meta.get("source", ""),
+                "card_type": meta.get("card_type", "unknown"),
+                "distance": dist,
+            })
+
+        context = "\n\n---\n\n".join(c["content"][:2000] for c in cards)
+        return MemorySearchResult(
+            cards=cards,
+            context=context,
+            result_count=len(cards),
+        )
+
+    # ------------------------------------------------------------------
+    # Success pattern & known trap cards
+    # ------------------------------------------------------------------
+
+    def write_success_memory(
+        self,
+        *,
+        prompt: str,
+        code: str,
+        execution_id: str,
+    ) -> Path:
+        """Write a 'success pattern' card when a test passes on the first try."""
+        self.settings.agent_memory_dir.mkdir(parents=True, exist_ok=True)
+        selectors = self._extract_stable_selectors(code)
+        keywords = self._keywords(prompt, "first_success", None, selectors)
+        card = "\n".join([
+            f"# Success Pattern: {self._single_line(prompt, 100)}",
+            "",
+            f"Keywords: {', '.join(keywords)}.",
+            "",
+            "## 场景",
+            prompt,
+            "",
+            "## 成功策略",
+            "首次执行即通过，以下脚本和选择器经验证稳定。",
+            "",
+            "## 稳定选择器",
+            self._bullet_list(selectors, "无显式选择器。"),
+            "",
+            "## 执行元数据",
+            f"- execution_id: `{execution_id}`",
+            f"- card_type: `success`",
+            "",
+        ])
+        target = self.settings.agent_memory_dir / f"success_{execution_id}.md"
+        target.write_text(card, encoding="utf-8")
+        self._index_single_card(target, card, "success")
+        return target
+
+    def write_trap_memory(
+        self,
+        *,
+        prompt: str,
+        error_summary: str,
+        execution_id: str,
+        attempt_count: int,
+    ) -> Path:
+        """Write a 'known trap' card when a test fails repeatedly."""
+        self.settings.agent_memory_dir.mkdir(parents=True, exist_ok=True)
+        keywords = self._keywords(prompt, "known_trap", error_summary, [])
+        card = "\n".join([
+            f"# Known Trap: {self._single_line(prompt, 100)}",
+            "",
+            f"Keywords: {', '.join(keywords)}.",
+            "",
+            "## 场景",
+            prompt,
+            "",
+            "## 反复失败摘要",
+            error_summary[:1000],
+            "",
+            "## 建议",
+            f"此场景在 {attempt_count} 次尝试后仍未通过，建议人工检查或调整策略。",
+            "",
+            "## 执行元数据",
+            f"- execution_id: `{execution_id}`",
+            f"- attempt_count: `{attempt_count}`",
+            f"- card_type: `trap`",
+            "",
+        ])
+        target = self.settings.agent_memory_dir / f"trap_{execution_id}.md"
+        target.write_text(card, encoding="utf-8")
+        self._index_single_card(target, card, "trap")
+        return target
+
+    def _index_single_card(self, path: Path, content: str, card_type: str) -> None:
+        """Index a single memory card into ChromaDB immediately after writing."""
+        collection = self._get_memory_collection()
+        if collection is None:
+            return
+        doc_id = f"mem_{path.stem}"
+        try:
+            collection.upsert(
+                documents=[content],
+                ids=[doc_id],
+                metadatas=[{"source": path.name, "card_type": card_type}],
+            )
+        except Exception:
+            logger.warning("Failed to index memory card %s", doc_id, exc_info=True)
+
+    @staticmethod
+    def _detect_card_type(text: str) -> str:
+        """Detect card type from the memory card content."""
+        lower = text[:200].lower()
+        if "success pattern" in lower or "card_type: `success`" in lower:
+            return "success"
+        if "known trap" in lower or "card_type: `trap`" in lower:
+            return "trap"
+        return "heal"

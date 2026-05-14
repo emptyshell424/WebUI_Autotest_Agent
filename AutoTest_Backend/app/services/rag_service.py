@@ -139,6 +139,168 @@ SOURCE_HINTS = {
     + TERM_ALIASES["login"]
     + TERM_ALIASES["table"]
     + TERM_ALIASES["form"],
+    "vue_admin_template_selectors": [
+        "selector",
+        "选择器",
+        "css selector",
+        "xpath",
+        "element plus",
+        "el-input",
+        "el-button",
+        "el-button--primary",
+        "el-table",
+        "el-dialog",
+        "sidebar",
+        "navbar",
+        "login page",
+        "button[type='submit']",
+        "type=\"button\"",
+        "locator",
+        "dom",
+        "rendered",
+    ]
+    + TERM_ALIASES["login"]
+    + TERM_ALIASES["dashboard"]
+    + TERM_ALIASES["form"]
+    + TERM_ALIASES["table"],
+    "locator_strategies": [
+        "selector",
+        "选择器",
+        "locator",
+        "定位",
+        "xpath",
+        "css",
+        "data-testid",
+        "find_element",
+        "by.id",
+        "by.name",
+        "by.css",
+        "by.xpath",
+        "brittle",
+        "stable",
+    ]
+    + TERM_ALIASES["click"]
+    + TERM_ALIASES["input"],
+    "common_failures": [
+        "NoSuchElementException",
+        "ElementClickInterceptedException",
+        "TimeoutException",
+        "StaleElementReferenceException",
+        "失败",
+        "failure",
+        "error",
+        "exception",
+        "repair",
+        "self-heal",
+        "intercepted",
+        "stale",
+    ]
+    + TERM_ALIASES["verify"],
+    "explicit_wait_patterns": [
+        "WebDriverWait",
+        "explicit wait",
+        "显式等待",
+        "visibility_of_element_located",
+        "element_to_be_clickable",
+        "presence_of_element_located",
+        "staleness_of",
+        "等待",
+        "wait condition",
+        "ec.",
+        "expected_conditions",
+    ]
+    + TERM_ALIASES["wait"],
+    "assertion_best_practices": [
+        "assert",
+        "assertion",
+        "assertError",
+        "验证",
+        "断言",
+        "Test Completed",
+        "测试完成",
+        "success criteria",
+        "page state",
+        "current_url",
+        "driver.title",
+        ".text",
+        "get_attribute",
+        "confirmation message",
+    ]
+    + TERM_ALIASES["verify"]
+    + TERM_ALIASES["message"]
+    + TERM_ALIASES["print_completed"],
+    "dynamic_pages": [
+        "dynamic",
+        "async",
+        "异步",
+        "loading",
+        "spinner",
+        "ajax",
+        "动态",
+        "page load",
+        "ready state",
+        "document.ready",
+    ]
+    + TERM_ALIASES["wait"],
+    "frames_windows_dialogs": [
+        "iframe",
+        "frame",
+        "window",
+        "tab",
+        "alert",
+        "dialog",
+        "popup",
+        "switch_to",
+        "window handle",
+        "弹窗",
+        "窗口",
+        "modal",
+        "new window",
+        "new tab",
+    ],
+    "navigation_and_popups": [
+        "navigation",
+        "导航",
+        "new tab",
+        "新标签页",
+        "window handle",
+        "alert",
+        "popup",
+        "弹窗",
+        "switch_to",
+        "driver.close",
+        "driver.switch_to",
+        "window_handles",
+    ],
+    "selenium_tips": [
+        "selenium",
+        "tip",
+        "WebDriverWait",
+        "stable selector",
+        "iframe",
+        "提示",
+        "best practice",
+        "recommend",
+        "javascript click",
+    ]
+    + TERM_ALIASES["click"]
+    + TERM_ALIASES["wait"],
+    "test_patterns": [
+        "login flow",
+        "search flow",
+        "form flow",
+        "table flow",
+        "测试模式",
+        "test pattern",
+        "登录流程",
+        "搜索流程",
+        "表单流程",
+        "表格流程",
+    ]
+    + TERM_ALIASES["login"]
+    + TERM_ALIASES["search"]
+    + TERM_ALIASES["form"]
+    + TERM_ALIASES["table"],
     "safe_code_generation_rules": TERM_ALIASES["safe"],
     "bilingual_ui_prompt_patterns": TERM_ALIASES["login"]
     + TERM_ALIASES["search"]
@@ -147,7 +309,7 @@ SOURCE_HINTS = {
     + TERM_ALIASES["message"]
     + TERM_ALIASES["table"]
     + TERM_ALIASES["form"]
-    + ["中文", "english"],
+    + ["中文", "english", "prompt", "首页", "按钮", "页面", "映射"],
     "element_ui_form_table_patterns": TERM_ALIASES["form"]
     + TERM_ALIASES["table"]
     + TERM_ALIASES["create"]
@@ -237,9 +399,9 @@ class RAGService:
         for file_path in files:
             source = file_path.relative_to(self.settings.knowledge_base_dir).as_posix()
             chunks = self._split_document(file_path.read_text(encoding="utf-8"), source=source)
-            for index, chunk in enumerate(chunks):
+            for chunk_index_in_file, chunk in enumerate(chunks):
                 documents.append(chunk)
-                ids.append(f"{re.sub(r'[^a-zA-Z0-9_.:-]+', '_', source)}-{index}")
+                ids.append(f"{re.sub(r'[^a-zA-Z0-9_.:-]+', '_', source)}-{chunk_index_in_file}")
                 metadata = {"source": source, "source_stem": file_path.stem}
                 metadatas.append(metadata)
                 indexed_documents.append(
@@ -479,6 +641,9 @@ class RAGService:
         expanded_terms = [query.strip()]
         normalized_query = query.lower()
         if self._contains_chinese(query):
+            # Cross-language bridge — these terms help Chinese queries match
+            # English-written knowledge docs. Keyword-specific expansion is
+            # handled below via QUERY_EXPANSION_RULES.
             expanded_terms.extend([
                 "selenium ui test",
                 "explicit wait",

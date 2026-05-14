@@ -16,8 +16,15 @@ class Settings(BaseSettings):
     KNOWLEDGE_BASE_DIR: str = "docs/knowledge"
     EXECUTIONS_DIR: str = "runs"
     EXECUTION_TIMEOUT_SECONDS: int = 60
-    MAX_SELF_HEAL_ATTEMPTS: int = 1
+    MAX_SELF_HEAL_ATTEMPTS: int = 2
     MAX_CONCURRENT_EXECUTIONS: int = 1
+    MODEL_TASK_ANALYSIS: str | None = None
+    MODEL_PLANNING: str | None = None
+    MODEL_CODE_GENERATION: str | None = None
+    MODEL_REPAIR: str | None = None
+    MODEL_DIAGNOSIS: str | None = None
+    MODEL_AGENT_REASONING: str | None = None
+    AGENT_CONTEXT_MAX_TOKENS: int = 4000
     FRONTEND_ORIGINS: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",
@@ -50,6 +57,10 @@ class Settings(BaseSettings):
     @property
     def agent_memory_dir(self) -> Path:
         return self.knowledge_base_dir / "agent_memory"
+
+    @property
+    def site_profiles_dir(self) -> Path:
+        return self.backend_root / "data" / "site_profiles"
 
     @property
     def executions_dir(self) -> Path:

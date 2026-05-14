@@ -10,8 +10,10 @@ from app.services import (
     GenerationService,
     LLMService,
     RAGService,
+    SiteProfileService,
     StrategyService,
 )
+from app.services.agent_memory_service import AgentMemoryService
 
 
 @dataclass(slots=True)
@@ -25,6 +27,8 @@ class ServiceContainer:
     strategy: StrategyService
     generation: GenerationService
     execution_service: ExecutionService
+    agent_memory: AgentMemoryService
+    site_profile_service: SiteProfileService
 
 
 def create_container(settings: Settings | None = None) -> ServiceContainer:
@@ -52,9 +56,10 @@ def create_container(settings: Settings | None = None) -> ServiceContainer:
     rag = RAGService(active_settings)
     llm = LLMService(active_settings)
     strategy = StrategyService()
-    generation = GenerationService(llm, rag, test_cases, strategy)
+    site_profile = SiteProfileService(storage_dir=active_settings.site_profiles_dir)
+    generation = GenerationService(llm, rag, test_cases, strategy, site_profile_service=site_profile)
     executions.recover_interrupted_executions()
-    execution_service = ExecutionService(active_settings, executions, test_cases, llm, strategy)
+    execution_service = ExecutionService(active_settings, executions, test_cases, llm, strategy, rag_service=rag, site_profile_service=site_profile)
 
     system_settings.upsert_many(
         {
@@ -66,6 +71,8 @@ def create_container(settings: Settings | None = None) -> ServiceContainer:
         }
     )
 
+    agent_memory = AgentMemoryService(active_settings)
+
     return ServiceContainer(
         settings=active_settings,
         test_cases=test_cases,
@@ -76,6 +83,8 @@ def create_container(settings: Settings | None = None) -> ServiceContainer:
         strategy=strategy,
         generation=generation,
         execution_service=execution_service,
+        agent_memory=agent_memory,
+        site_profile_service=site_profile,
     )
 
 

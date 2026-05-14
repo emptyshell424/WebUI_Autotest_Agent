@@ -12,6 +12,23 @@ SITE_PROFILE_BAIDU_SEARCH = "baidu_search"
 FALLBACK_REASON_BAIDU_HOMEPAGE_TIMEOUT = "baidu_homepage_search_anchor_timeout"
 FALLBACK_REASON_BAIDU_HOMEPAGE_FAILURE = "baidu_homepage_search_anchor_failure"
 
+# Vue-admin-template critical selector rules injected into generation and repair prompts.
+# Authoritative reference: docs/knowledge/vue_admin_template_selectors.md,
+# docs/knowledge/vue_admin_template_patterns.md, docs/knowledge/login_flows.md.
+VUE_ADMIN_CRITICAL_SELECTOR_RULES = (
+    "CRITICAL SELECTOR RULES FOR THIS TARGET (Element UI / vue-admin-template): "
+    "Username input: use CSS selector input[name='username'] (NOT #username). "
+    "Password input: use CSS selector input[name='password'] (NOT #password). "
+    "Login button: Element UI <el-button> renders as <button type=\"button\" class=\"el-button--primary\">. "
+    "Use CSS selector button.el-button--primary (NEVER use button[type='submit'] — "
+    "it WILL fail because type is \"button\" not \"submit\"). "
+    "For XPath text matching, use contains(., 'text') with DOT, never contains(text(), 'text'). "
+    "Dashboard post-login verification: use //*[contains(.,'Dashboard')] or verify URL contains /dashboard. "
+    'The user info display shows "name: Super Admin" (NOT "name: admin" — '
+    "'admin' is the login username, 'Super Admin' is the display name). "
+    "These rules override any other selector patterns and are verified against the actual page DOM."
+)
+
 SEARCH_TERMS = ("搜索", "搜寻", "检索", "查询", "search")
 BAIDU_TERMS = ("百度", "baidu")
 RESULT_ONLY_TERMS = (
@@ -228,7 +245,9 @@ class StrategyService:
         has_homepage_marker = self.looks_like_baidu_homepage_code(original_code) or any(
             marker in combined for marker in HOMEPAGE_SEARCH_MARKERS
         )
-        already_results_page = "baidu.com/s?wd=" in combined
+        # Only check the actual script for results URL — error logs may
+        # contain baidu.com/s?wd= from a previous, unrelated URL mention.
+        already_results_page = "baidu.com/s?wd=" in original_code.lower()
         if not has_homepage_marker or already_results_page:
             return None
 
@@ -242,7 +261,7 @@ class StrategyService:
         return re.sub(r"\s+", "", text).lower()
 
     def _contains_any(self, text: str, terms: tuple[str, ...]) -> bool:
-        return any(term.lower() in text for term in terms)
+        return any(self._normalize(term) in text for term in terms)
 
     def _is_baidu_search_prompt(self, normalized_prompt: str) -> bool:
         return self._contains_any(normalized_prompt, SEARCH_TERMS) and self._contains_any(

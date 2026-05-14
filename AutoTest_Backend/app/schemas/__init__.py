@@ -1,3 +1,4 @@
+from app.schemas.agent import AgentEventRead, AgentRunRequest, AgentRunResponse, AgentTraceResponse
 from app.schemas.execution import (
     ExecutionCreateRequest,
     ExecutionListResponse,
@@ -17,6 +18,10 @@ from app.schemas.settings import (
 )
 
 __all__ = [
+    "AgentEventRead",
+    "AgentRunRequest",
+    "AgentRunResponse",
+    "AgentTraceResponse",
     "ExecutionCreateRequest",
     "ExecutionListResponse",
     "ExecutionRead",
