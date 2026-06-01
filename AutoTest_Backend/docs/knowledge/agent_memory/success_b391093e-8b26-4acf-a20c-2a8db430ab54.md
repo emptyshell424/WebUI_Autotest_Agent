@@ -1,0 +1,17 @@
+# Success Pattern: Assuming a Selenium WebDriver instance named 'driver' is already on Baidu homepage (https://www.b...
+
+Keywords: agent_memory, self-heal, healed_completed, first_success, Assuming, Selenium, WebDriver, instance, named, driver, already, Baidu, homepage, https://www.baidu.com, WebDriverWait, 10-second, timeout, locate, search, input, field, CSS, selector, #kw, click, focus, clear, existing, text, type.
+
+## 场景
+Assuming a Selenium WebDriver instance named 'driver' is already on Baidu homepage (https://www.baidu.com), use WebDriverWait with 10-second timeout to locate the search input field by CSS selector '#kw', click it to focus, clear any existing text, type 'DeepSeek' into it, then verify that the input's value attribute equals 'DeepSeek'. Do not navigate away or click the search button. Include proper imports and use the existing driver variable. However, for the script to be executable independently, first create a new Chrome driver, navigate to https://www.baidu.com, wait for the page to load, then perform the described steps. At the end, print 'Verification passed' if the value matches, otherwise print 'Verification failed'.
+
+## 成功策略
+首次执行即通过，以下脚本和选择器经验证稳定。
+
+## 稳定选择器
+- CSS_SELECTOR=#kw
+- url=https://www.baidu.com
+
+## 执行元数据
+- execution_id: `b391093e-8b26-4acf-a20c-2a8db430ab54`
+- card_type: `success`

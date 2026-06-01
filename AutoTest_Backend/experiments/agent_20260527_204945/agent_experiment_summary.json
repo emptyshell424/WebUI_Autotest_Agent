@@ -1,0 +1,86 @@
+{
+  "effective_execution_count": 30,
+  "first_pass_success_count": 16,
+  "self_heal_triggered_count": 0,
+  "self_heal_success_count": 0,
+  "final_success_count": 16,
+  "first_pass_success_rate": 53.3,
+  "self_heal_triggered_rate": 0.0,
+  "self_heal_success_rate": 0.0,
+  "final_success_rate": 53.3,
+  "average_elapsed_seconds": 220.56,
+  "by_scene": {
+    "login": {
+      "count": 8,
+      "first_success": 6,
+      "heal_triggered": 0,
+      "heal_success": 0,
+      "final_success": 6,
+      "avg_elapsed_seconds": 179.84,
+      "first_success_rate": 75.0,
+      "self_heal_triggered_rate": 0.0,
+      "self_heal_success_rate": 0.0,
+      "final_success_rate": 75.0
+    },
+    "table": {
+      "count": 4,
+      "first_success": 1,
+      "heal_triggered": 0,
+      "heal_success": 0,
+      "final_success": 1,
+      "avg_elapsed_seconds": 223.18,
+      "first_success_rate": 25.0,
+      "self_heal_triggered_rate": 0.0,
+      "self_heal_success_rate": 0.0,
+      "final_success_rate": 25.0
+    },
+    "form": {
+      "count": 4,
+      "first_success": 1,
+      "heal_triggered": 0,
+      "heal_success": 0,
+      "final_success": 1,
+      "avg_elapsed_seconds": 215.13,
+      "first_success_rate": 25.0,
+      "self_heal_triggered_rate": 0.0,
+      "self_heal_success_rate": 0.0,
+      "final_success_rate": 25.0
+    },
+    "navigation": {
+      "count": 3,
+      "first_success": 0,
+      "heal_triggered": 0,
+      "heal_success": 0,
+      "final_success": 0,
+      "avg_elapsed_seconds": 168.81,
+      "first_success_rate": 0.0,
+      "self_heal_triggered_rate": 0.0,
+      "self_heal_success_rate": 0.0,
+      "final_success_rate": 0.0
+    },
+    "baidu_search": {
+      "count": 10,
+      "first_success": 7,
+      "heal_triggered": 0,
+      "heal_success": 0,
+      "final_success": 7,
+      "avg_elapsed_seconds": 280.81,
+      "first_success_rate": 70.0,
+      "self_heal_triggered_rate": 0.0,
+      "self_heal_success_rate": 0.0,
+      "final_success_rate": 70.0
+    },
+    "local_smoke": {
+      "count": 1,
+      "first_success": 1,
+      "heal_triggered": 0,
+      "heal_success": 0,
+      "final_success": 1,
+      "avg_elapsed_seconds": 110.18,
+      "first_success_rate": 100.0,
+      "self_heal_triggered_rate": 0.0,
+      "self_heal_success_rate": 0.0,
+      "final_success_rate": 100.0
+    }
+  }
+}

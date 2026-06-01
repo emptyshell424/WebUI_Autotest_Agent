@@ -24,6 +24,7 @@
           <p class="section-hint">{{ card.label }}</p>
         </article>
       </div>
+      <!-- thesis: hide — trend chart and table hidden (too little data for meaningful trend)
       <TrendChart
         v-if="trendRows.length"
         :rows="trendRows"
@@ -32,19 +33,10 @@
 
       <div v-if="trendRows.length" class="table-wrap">
         <el-table :data="trendRows" row-key="bucket" max-height="260">
-          <el-table-column prop="bucket" :label="t('metrics.trend.date')" min-width="140" />
-          <el-table-column prop="execution_count" :label="t('metrics.trend.executions')" width="110" />
-          <el-table-column prop="completed_count" :label="t('metrics.trend.firstPass')" width="110" />
-          <el-table-column prop="healed_completed_count" :label="t('metrics.trend.healed')" width="110" />
-          <el-table-column prop="failed_count" :label="t('metrics.trend.failed')" width="110" />
-          <el-table-column prop="blocked_count" :label="t('metrics.trend.blocked')" width="110" />
-          <el-table-column :label="t('metrics.trend.finalSuccessRate')" width="130">
-            <template #default="{ row }">
-              {{ formatRate(row.final_success_rate) }}
-            </template>
-          </el-table-column>
+          ...trend table...
         </el-table>
       </div>
+      -->
       <el-empty v-else :description="t('metrics.empty')" />
     </section>
   </div>

@@ -1,0 +1,53 @@
+{
+  "stats": {
+    "plan": "A",
+    "total_prompts": 3,
+    "gen_success_rate": "3/3 (100.0%)",
+    "exec_success_rate": "0/3 (0.0%)",
+    "overall_success_rate": "0/3 (0.0%)",
+    "avg_gen_time_ms": 13234,
+    "avg_exec_time_ms": 2041,
+    "self_heal_count_total": 0
+  },
+  "details": [
+    {
+      "prompt_id": "001",
+      "prompt": "Assuming a Selenium WebDriver instance named 'driver' is already on Baidu homepage (https://www.baidu.com), use WebDriverWait with 10-second timeout to locate the search input field by CSS selector '#kw', click it to focus, clear any existing text, type 'DeepSeek' into it, then verify that the input's value attribute equals 'DeepSeek'. Do not navigate away or click the search button. Include proper imports and use the existing driver variable. However, for the script to be executable independently, first create a new Chrome driver, navigate to https://www.baidu.com, wait for the page to load, then perform the described steps. At the end, print 'Verification passed' if the value matches, otherwise print 'Verification failed'.",
+      "plan": "A",
+      "gen_success": true,
+      "gen_elapsed_ms": 21797,
+      "gen_error": null,
+      "exec_success": false,
+      "exec_status": "api_error",
+      "exec_elapsed_ms": 2046,
+      "exec_error": "HTTP 404: {\"status\":\"error\",\"code\":\"test_case_not_found\",\"message\":\"Test case was not found.\",\"details\":null}",
+      "self_heal_count": 0
+    },
+    {
+      "prompt_id": "002",
+      "prompt": "Assuming a Selenium WebDriver instance named 'driver' is already on Baidu homepage (https://www.baidu.com), use WebDriverWait with 10-second timeout to locate the search input field by CSS selector '#kw', click it to focus, clear any existing text, type the text 'DeepSeek' into it, then verify that the input's value attribute equals 'DeepSeek'. Do not navigate away or click the search button. Include proper imports and use the existing driver variable.",
+      "plan": "A",
+      "gen_success": true,
+      "gen_elapsed_ms": 10703,
+      "gen_error": null,
+      "exec_success": false,
+      "exec_status": "api_error",
+      "exec_elapsed_ms": 2046,
+      "exec_error": "HTTP 404: {\"status\":\"error\",\"code\":\"test_case_not_found\",\"message\":\"Test case was not found.\",\"details\":null}",
+      "self_heal_count": 0
+    },
+    {
+      "prompt_id": "003",
+      "prompt": "Assuming a Selenium WebDriver instance named 'driver' is already on Baidu homepage (https://www.baidu.com), use WebDriverWait with 10-second timeout to locate the search input field by CSS selector '#kw', click it to focus, clear any existing text, type the text 'DeepSeek' into it, then verify that the input's value attribute equals 'DeepSeek'. Do not navigate away or click the search button. Include proper imports and use the existing driver variable. Do not include any additional steps beyond this verification.",
+      "plan": "A",
+      "gen_success": true,
+      "gen_elapsed_ms": 7203,
+      "gen_error": null,
+      "exec_success": false,
+      "exec_status": "api_error",
+      "exec_elapsed_ms": 2031,
+      "exec_error": "HTTP 404: {\"status\":\"error\",\"code\":\"test_case_not_found\",\"message\":\"Test case was not found.\",\"details\":null}",
+      "self_heal_count": 0
+    }
+  ]
+}

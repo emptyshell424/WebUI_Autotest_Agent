@@ -450,6 +450,13 @@ class RAGService:
 
         augmented_query = self._build_search_query(normalized_query)
 
+        if active_mode == "none":
+            return RAGSearchResult(
+                context="",
+                sources=[],
+                result_count=0,
+                retrieval_mode="none",
+            )
         if active_mode == "vector":
             return self._search_vector_only(augmented_query, n_results)
         if active_mode == "hybrid":
@@ -733,7 +740,7 @@ class RAGService:
 
     def _normalize_retrieval_mode(self, retrieval_mode: str | None) -> str:
         mode = (retrieval_mode or self.default_retrieval_mode).strip().lower()
-        if mode not in {"vector", "hybrid", "hybrid_rerank"}:
+        if mode not in {"vector", "hybrid", "hybrid_rerank", "none"}:
             return self.default_retrieval_mode
         return mode
 

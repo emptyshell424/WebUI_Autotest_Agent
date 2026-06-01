@@ -22,9 +22,7 @@ describe('WorkbenchView', () => {
   it('renders the summary strip with status metrics', () => {
     const text = wrapper.text()
     expect(text).toContain('Current status')
-    expect(text).toContain('Knowledge hits')
     expect(text).toContain('Latest case')
-    expect(text).toContain('Repair attempts')
   })
 
   it('renders the prompt textarea', () => {
@@ -36,17 +34,25 @@ describe('WorkbenchView', () => {
     expect(wrapper.text()).toContain('Scenario brief')
   })
 
-  it('shows empty trace message when no execution', () => {
+  it('renders three mode buttons', () => {
+    const text = wrapper.text()
+    expect(text).toContain('Plan A')
+    expect(text).toContain('Plan B')
+    expect(text).toContain('Plan C')
+  })
+
+  it('shows select mode hint when no mode active', () => {
+    expect(wrapper.text()).toContain('Click a plan button above to start.')
+  })
+
+  it('shows empty trace message in mode B', async () => {
+    wrapper.vm.activeMode = 'b'
+    await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('Start a run to see the live execution trace')
   })
 
-  it('shows retrieval mode options', () => {
-    const text = wrapper.text()
-    expect(text).toContain('Vector only')
-    expect(text).toContain('Hybrid retrieval')
-  })
-
-  it('displays execution info when execution is set', async () => {
+  it('displays execution info in mode A when execution is set', async () => {
+    wrapper.vm.activeMode = 'a'
     store.currentExecution = {
       id: 'exec-001',
       test_case_id: 'case-001',
@@ -69,5 +75,17 @@ describe('WorkbenchView', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('exec-001')
     expect(wrapper.text()).toContain('Completed')
+  })
+
+  it('shows agent trace panel in mode C', async () => {
+    wrapper.vm.activeMode = 'c'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('Agent Reasoning Trace')
+  })
+
+  it('hides run button in mode C', async () => {
+    wrapper.vm.activeMode = 'c'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).not.toContain('Run current script')
   })
 })

@@ -1,0 +1,44 @@
+{
+  "plan": "B",
+  "description": "Default hybrid_rerank retrieval + self-heal enabled",
+  "test_cases": {
+    "total": 177,
+    "generation_success": 177,
+    "generation_failed": 0,
+    "generation_success_rate": "177/177 (100.0%)"
+  },
+  "executions": {
+    "total": 121,
+    "success": 63,
+    "failed": 57,
+    "pending_or_running": 0,
+    "execution_success_rate": "63/121 (52.1%)",
+    "status_breakdown": {
+      "blocked": 6,
+      "cancelled": 1,
+      "completed": 41,
+      "failed": 16,
+      "healed_completed": 22,
+      "healed_failed": 35
+    }
+  },
+  "self_heal": {
+    "total_attempts": 60,
+    "healed": 22,
+    "failed": 35,
+    "heal_success_rate": "22/60 (36.7%)",
+    "executions_with_heal": 60,
+    "executions_without_heal": 61
+  },
+  "timing": {
+    "avg_execution_time_ms": 29505,
+    "median_execution_time_ms": 22419,
+    "execution_count_with_timing": 115,
+    "outliers_excluded": 1
+  },
+  "overall": {
+    "cases_with_executions": 109,
+    "overall_success": 59,
+    "overall_success_rate": "59/109 (54.1%)"
+  }
+}

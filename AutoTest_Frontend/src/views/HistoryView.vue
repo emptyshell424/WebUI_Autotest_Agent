@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="view-grid history-grid">
     <section class="surface-panel">
       <div class="section-title">
@@ -11,19 +11,13 @@
         </el-button>
       </div>
 
+      <!-- thesis: hide — status filter dropdown hidden
       <div class="toolbar-row">
         <el-select v-model="historyStatusFilter" clearable @change="refreshHistory">
-          <el-option :label="t('history.allStatuses')" value="" />
-          <el-option :label="t('workbench.status.queued')" value="queued" />
-          <el-option :label="t('workbench.status.running')" value="running" />
-          <el-option :label="t('workbench.status.completed')" value="completed" />
-          <el-option :label="t('workbench.status.healed_completed')" value="healed_completed" />
-          <el-option :label="t('workbench.status.failed')" value="failed" />
-          <el-option :label="t('workbench.status.healed_failed')" value="healed_failed" />
-          <el-option :label="t('workbench.status.blocked')" value="blocked" />
-          <el-option :label="t('workbench.status.cancelled')" value="cancelled" />
+          ...status options...
         </el-select>
       </div>
+      -->
 
       <div class="table-wrap">
         <el-table
@@ -38,18 +32,20 @@
               <span class="status-badge" :data-state="row.status">{{ formatStatus(row.status) }}</span>
             </template>
           </el-table-column>
+          <!-- thesis: hide — outcome column hidden
           <el-table-column :label="t('history.outcome')" width="160">
-            <template #default="{ row }">
-              <span class="status-badge" :data-state="row.status">{{ classifyOutcome(row) }}</span>
-            </template>
+            ...outcome column...
           </el-table-column>
-          <el-table-column prop="test_case_title" :label="t('history.scenario')" min-width="220" />
+          -->
+          <el-table-column prop="test_case_title" :label="t('history.scenario')" min-width="220" show-overflow-tooltip />
+          <!-- thesis: hide — strategy column hidden
           <el-table-column :label="t('history.strategy')" min-width="170">
-            <template #default="{ row }">
-              {{ formatStrategy(row.effective_strategy) }}
-            </template>
+            ...strategy column...
           </el-table-column>
+          -->
+          <!-- thesis: hide — repairs column hidden
           <el-table-column prop="self_heal_count" :label="t('history.repairs')" width="100" />
+          -->
           <el-table-column prop="created_at" :label="t('history.createdAt')" min-width="220" />
           <el-table-column prop="finished_at" :label="t('history.finishedAt')" min-width="220" />
           <el-table-column :label="t('history.actions')" width="160" fixed="right">
@@ -75,30 +71,34 @@
           <h4>{{ t('common.selectedExecution') }}</h4>
           <p class="section-hint">{{ t('history.selectedHint') }}</p>
         </div>
-        <el-button text @click="openInWorkbench" :disabled="!currentExecution">{{ t('history.openInWorkbench') }}</el-button>
+        <el-button text @click="openInWorkbench" :disabled="!inspectedRecord">{{ t('history.openInWorkbench') }}</el-button>
       </div>
 
-      <div v-if="currentExecution" class="stack-rows">
+      <div v-if="inspectedRecord" class="stack-rows">
         <div class="inline-meta">
-          <span>{{ t('workbench.execution') }}: {{ currentExecution.id }}</span>
-          <span>{{ t('history.case') }}: {{ currentExecution.test_case_id }}</span>
-          <span>{{ t('history.status') }}: {{ formatStatus(currentExecution.status) }}</span>
-          <span>{{ t('history.repairs') }}: {{ currentExecution.self_heal_count || 0 }}</span>
+          <span>{{ t('workbench.execution') }}: {{ inspectedRecord.id }}</span>
+          <span>{{ t('history.case') }}: {{ inspectedRecord.test_case_id }}</span>
+          <span>{{ t('history.status') }}: {{ formatStatus(inspectedRecord.status) }}</span>
+          <span>{{ t('history.repairs') }}: {{ inspectedRecord.self_heal_count || 0 }}</span>
         </div>
 
+        <div v-if="inspectedCase" class="detail-block">
+          <p class="eyebrow">{{ t('workbench.sectionTitle') }}</p>
+          <div class="prompt-display-text">{{ inspectedCase.prompt }}</div>
+        </div>
+
+        <!-- thesis: hide — strategy audit hidden
         <div class="detail-block">
           <p class="eyebrow">{{ t('history.strategyAudit') }}</p>
           <div class="inline-meta">
-            <span>{{ t('common.requestedStrategy') }}: {{ formatStrategy(currentExecution.requested_strategy) }}</span>
-            <span>{{ t('common.effectiveStrategy') }}: {{ formatStrategy(currentExecution.effective_strategy) }}</span>
-            <span>{{ t('common.siteProfile') }}: {{ formatSiteProfile(currentExecution.site_profile) }}</span>
-            <span>{{ t('common.fallbackReason') }}: {{ formatFallbackReason(currentExecution.fallback_reason) }}</span>
+            ...strategy audit...
           </div>
         </div>
+        -->
 
-        <div v-if="currentExecution.validation_errors?.length" class="inline-list">
+        <div v-if="inspectedRecord.validation_errors?.length" class="inline-list">
           <el-tag
-            v-for="issue in currentExecution.validation_errors"
+            v-for="issue in inspectedRecord.validation_errors"
             :key="issue"
             type="danger"
             effect="plain"
@@ -115,7 +115,7 @@
         <div class="split-column">
           <div>
             <p class="eyebrow">{{ t('history.executedScript') }}</p>
-            <pre class="mono-pane --light">{{ currentExecution.executed_code }}</pre>
+            <pre class="mono-pane --light">{{ inspectedRecord.executed_code }}</pre>
           </div>
           <div>
             <p class="eyebrow">{{ t('history.logs') }}</p>
@@ -123,29 +123,11 @@
           </div>
         </div>
 
-        <div v-if="currentExecution.self_heal_attempts?.length" class="stack-rows">
-          <article
-            v-for="attempt in currentExecution.self_heal_attempts"
-            :key="attempt.id"
-            class="detail-block"
-          >
-            <div class="section-title --compact">
-              <div>
-                <p class="eyebrow">{{ t('history.repairAttempt', { count: attempt.attempt_number }) }}</p>
-                <h4>{{ formatStatus(attempt.status) }}</h4>
-              </div>
-              <span class="status-badge" :data-state="attempt.status">{{ formatStatus(attempt.status) }}</span>
-            </div>
-            <div class="inline-meta">
-              <span>{{ t('common.strategyBefore') }}: {{ formatStrategy(attempt.strategy_before) }}</span>
-              <span>{{ t('common.strategyAfter') }}: {{ formatStrategy(attempt.strategy_after) }}</span>
-              <span>{{ t('common.siteProfile') }}: {{ formatSiteProfile(attempt.site_profile) }}</span>
-              <span>{{ t('common.fallbackReason') }}: {{ formatFallbackReason(attempt.fallback_reason) }}</span>
-            </div>
-            <p class="section-hint">{{ attempt.repair_summary || attempt.failure_reason || t('common.noRepairSummary') }}</p>
-            <pre class="mono-pane --light">{{ attempt.repaired_code || t('common.noRepairedCode') }}</pre>
-          </article>
+        <!-- thesis: hide — self_heal_attempts timeline hidden
+        <div v-if="inspectedRecord.self_heal_attempts?.length" class="stack-rows">
+          ...self_heal_attempts timeline...
         </div>
+        -->
       </div>
 
       <el-empty v-else :description="t('history.selectToInspect')" />
@@ -166,25 +148,25 @@ import { buildHistoryOutput, classifyOutcome as classifyOutcomeValue } from '../
 
 const router = useRouter()
 const workspaceStore = useWorkspaceStore()
-const { currentExecution, history, historyTotal, historyLimit, loadingHistory } = storeToRefs(workspaceStore)
+const { inspectedRecord, inspectedCase, history, historyTotal, historyLimit, loadingHistory } = storeToRefs(workspaceStore)
 const { t } = useI18n()
 const historyStatusFilter = ref(workspaceStore.historyStatusFilter)
 const currentPage = computed(() => Math.floor(workspaceStore.historyOffset / workspaceStore.historyLimit) + 1)
 
 const historyOutput = computed(() => {
-  if (!currentExecution.value) {
+  if (!inspectedRecord.value) {
     return ''
   }
-  return buildHistoryOutput(currentExecution.value, t)
+  return buildHistoryOutput(inspectedRecord.value, t)
 })
 
 const initialFailureReason = computed(() => {
-  if (!currentExecution.value) {
+  if (!inspectedRecord.value) {
     return ''
   }
   return (
-    currentExecution.value.self_heal_attempts?.[0]?.failure_reason ||
-    currentExecution.value.error ||
+    inspectedRecord.value.self_heal_attempts?.[0]?.failure_reason ||
+    inspectedRecord.value.error ||
     ''
   )
 })
@@ -211,13 +193,10 @@ const classifyOutcome = (row) => {
 
 const refreshHistory = async () => {
   try {
-    const items = await workspaceStore.fetchHistory({
+    await workspaceStore.fetchHistory({
       offset: 0,
       status: historyStatusFilter.value,
     })
-    if (!currentExecution.value && items.length) {
-      await workspaceStore.inspectExecution(items[0].id)
-    }
     ElMessage.success(t('history.historyRefreshed'))
   } catch (error) {
     ElMessage.error(workspaceStore.lastError || t('history.historyRefreshFailed'))
@@ -237,15 +216,15 @@ const handlePageChange = async (page) => {
 
 const selectExecution = async (row) => {
   try {
-    await workspaceStore.inspectExecution(row.id)
+    await workspaceStore.inspectRecord(row.id)
   } catch (error) {
     ElMessage.error(workspaceStore.lastError || t('history.loadExecutionFailed'))
   }
 }
 
 const openInWorkbench = () => {
-  if (!currentExecution.value) return
-  workspaceStore.hydrateFromHistory(currentExecution.value)
+  if (!inspectedRecord.value) return
+  workspaceStore.hydrateFromHistory(inspectedRecord.value)
   router.push('/')
 }
 
@@ -261,10 +240,6 @@ const handleCancel = async (row) => {
 onMounted(async () => {
   if (!history.value.length) {
     await refreshHistory()
-    return
-  }
-  if (!currentExecution.value) {
-    await workspaceStore.inspectExecution(history.value[0].id)
   }
 })
 </script>

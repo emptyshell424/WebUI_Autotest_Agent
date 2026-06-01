@@ -22,21 +22,8 @@ venv/
 .claude/
 .windsurf/
 
-# Thesis documents (personal)
-docs/THESIS_*
-docs/thesis_*
-docs/~$*
-
-# Temp debug files (from thesis editing)
-AutoTest_Backend/*.txt
+# Runtime database
 AutoTest_Backend/auto_test.db
-
-# One-off thesis fix scripts
-AutoTest_Backend/fix_refs.py
-AutoTest_Backend/fix_thesis.py
-AutoTest_Backend/fix_thesis_v2.py
-AutoTest_Backend/fix_thesis_v2b.py
-AutoTest_Backend/fix_thesis_v3.py
 
 # One-off test scripts (root level, not tests/)
 AutoTest_Backend/agent_test.py

@@ -1,0 +1,78 @@
+{
+  "stats": {
+    "plan": "C",
+    "total_prompts": 3,
+    "agent_success_rate": "2/3 (66.7%)",
+    "avg_agent_time_ms": 144677,
+    "avg_steps": 11.7,
+    "total_errors": 0
+  },
+  "details": [
+    {
+      "prompt_id": "001",
+      "prompt": "Assuming a Selenium WebDriver instance named 'driver' is already on Baidu homepage (https://www.baidu.com), use WebDriverWait with 10-second timeout to locate the search input field by CSS selector '#kw', click it to focus, clear any existing text, type 'DeepSeek' into it, then verify that the input's value attribute equals 'DeepSeek'. Do not navigate away or click the search button. Include proper imports and use the existing driver variable. However, for the script to be executable independently, first create a new Chrome driver, navigate to https://www.baidu.com, wait for the page to load, then perform the described steps. At the end, print 'Verification passed' if the value matches, otherwise print 'Verification failed'.",
+      "plan": "C",
+      "agent_success": true,
+      "agent_status": "success",
+      "agent_elapsed_ms": 73438,
+      "total_steps": 6,
+      "thinking_count": 6,
+      "action_count": 5,
+      "error_count": 0,
+      "errors": [],
+      "summary": {
+        "event_type": "summary",
+        "run_id": "00e8f747-705f-405d-8ad3-da584ae2f907",
+        "status": "success",
+        "steps": 6,
+        "test_case_id": "251be418-aba5-4c9c-9046-3d8c12605912",
+        "execution_id": "0f03767d-a7ec-492a-823b-96cab456a861",
+        "error": null
+      }
+    },
+    {
+      "prompt_id": "002",
+      "prompt": "Assuming a Selenium WebDriver instance named 'driver' is already on Baidu homepage (https://www.baidu.com), use WebDriverWait with 10-second timeout to locate the search input field by CSS selector '#kw', click it to focus, clear any existing text, type the text 'DeepSeek' into it, then verify that the input's value attribute equals 'DeepSeek'. Do not navigate away or click the search button. Include proper imports and use the existing driver variable.",
+      "plan": "C",
+      "agent_success": true,
+      "agent_status": "success",
+      "agent_elapsed_ms": 147781,
+      "total_steps": 14,
+      "thinking_count": 14,
+      "action_count": 13,
+      "error_count": 0,
+      "errors": [],
+      "summary": {
+        "event_type": "summary",
+        "run_id": "7a7e5e7f-abdc-4297-adce-292423adf3ac",
+        "status": "success",
+        "steps": 14,
+        "test_case_id": "e91800a5-2a6e-443e-9092-cf219059748f",
+        "execution_id": "99edd11a-1036-4d40-8790-30ed57976bbb",
+        "error": null
+      }
+    },
+    {
+      "prompt_id": "003",
+      "prompt": "Assuming a Selenium WebDriver instance named 'driver' is already on Baidu homepage (https://www.baidu.com), use WebDriverWait with 10-second timeout to locate the search input field by CSS selector '#kw', click it to focus, clear any existing text, type the text 'DeepSeek' into it, then verify that the input's value attribute equals 'DeepSeek'. Do not navigate away or click the search button. Include proper imports and use the existing driver variable. Do not include any additional steps beyond this verification.",
+      "plan": "C",
+      "agent_success": false,
+      "agent_status": "stream_error",
+      "agent_elapsed_ms": 212812,
+      "total_steps": 15,
+      "thinking_count": 15,
+      "action_count": 15,
+      "error_count": 0,
+      "errors": [],
+      "summary": {
+        "event_type": "summary",
+        "run_id": "0e94be8c-ee41-4585-9200-cd67ada74f2a",
+        "status": "max_steps_reached",
+        "steps": 15,
+        "test_case_id": "6909cdc6-560f-4a08-bfc0-0b9f7f98cad1",
+        "execution_id": "d3d4d098-1875-46da-b5ec-9628cacd3d7b",
+        "error": null
+      }
+    }
+  ]
+}

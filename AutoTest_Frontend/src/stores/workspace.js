@@ -19,6 +19,9 @@ export const useWorkspaceStore = defineStore('workspace', {
     currentCase: null,
     editedCode: '',
     currentExecution: null,
+    // History detail inspection — isolated from workspace state
+    inspectedRecord: null,
+    inspectedCase: null,
     knowledgeSources: [],
     ragResultCount: 0,
     history: [],
@@ -126,6 +129,16 @@ export const useWorkspaceStore = defineStore('workspace', {
       this.knowledgeSources = []
       this.ragResultCount = 0
       this.activeRetrievalMode = this.retrievalMode
+      return record
+    },
+    // inspectRecord: populates inspectedRecord/inspectedCase only (does NOT pollute workspace)
+    async inspectRecord(executionId) {
+      this.inspectedRecord = null
+      this.inspectedCase = null
+      const { data: record } = await apiClient.get(`/executions/${executionId}`)
+      this.inspectedRecord = record
+      const { data: tc } = await apiClient.get(`/test-cases/${record.test_case_id}`)
+      this.inspectedCase = tc
       return record
     },
     hydrateFromHistory(record) {

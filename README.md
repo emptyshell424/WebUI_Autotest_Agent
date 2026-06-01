@@ -31,7 +31,7 @@ webui-autotest-agent/
 cd AutoTest_Backend
 pip install -e .           # or: uv sync
 cp .env.example .env       # configure DEEPSEEK_API_KEY, paths
-uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --port 8000
 ```
 
 ### Frontend
@@ -78,19 +78,19 @@ npm test
 
 All endpoints are prefixed with `/api/v1`.
 
-| Method | Path | Description |
-| ------ | ---- | ----------- |
-| GET | `/health` | System health check |
-| POST | `/generate` | Generate test script from prompt |
-| POST | `/executions` | Create and run an execution |
-| GET | `/executions` | List executions (paginated) |
-| GET | `/executions/stats` | Execution metrics and trends |
-| GET | `/executions/{id}` | Get execution details |
-| DELETE | `/executions/{id}` | Cancel an execution |
-| GET | `/test-cases/{id}` | Get test case details |
-| GET | `/settings` | Get runtime settings |
-| PUT | `/settings` | Update runtime settings |
-| POST | `/knowledge/rebuild` | Rebuild the knowledge index |
+| Method | Path                   | Description                      |
+| ------ | ---------------------- | -------------------------------- |
+| GET    | `/health`            | System health check              |
+| POST   | `/generate`          | Generate test script from prompt |
+| POST   | `/executions`        | Create and run an execution      |
+| GET    | `/executions`        | List executions (paginated)      |
+| GET    | `/executions/stats`  | Execution metrics and trends     |
+| GET    | `/executions/{id}`   | Get execution details            |
+| DELETE | `/executions/{id}`   | Cancel an execution              |
+| GET    | `/test-cases/{id}`   | Get test case details            |
+| GET    | `/settings`          | Get runtime settings             |
+| PUT    | `/settings`          | Update runtime settings          |
+| POST   | `/knowledge/rebuild` | Rebuild the knowledge index      |
 
 ## CI
 

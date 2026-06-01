@@ -1,5 +1,5 @@
 <template>
-  <section class="surface-panel agent-trace-panel">
+  <section ref="scrollContainer" class="surface-panel agent-trace-panel">
     <div class="section-title">
       <div>
         <h4>{{ t('agentTrace.title') }}</h4>
@@ -53,7 +53,7 @@
 
     <!-- Timeline of thinking/action pairs -->
     <div v-if="stepPairs.length" class="trace-timeline">
-      <div v-for="pair in stepPairs" :key="pair.thinking.step" class="trace-step-group">
+      <div v-for="(pair, idx) in stepPairs" :key="pair.thinking.step" class="trace-step-group" :class="{ 'trace-step-group--active': idx === stepPairs.length - 1 && running }">
         <!-- Thinking -->
         <div class="trace-row trace-row--thinking">
           <div class="trace-step-num">{{ pair.thinking.step }}</div>
@@ -146,7 +146,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import { useI18n } from '../i18n'
@@ -159,6 +159,17 @@ import {
 
 const { t } = useI18n()
 const agentStore = useAgentStore()
+const scrollContainer = ref(null)
+
+watch(
+  () => agentStore.events.length,
+  async () => {
+    await nextTick()
+    if (scrollContainer.value) {
+      scrollContainer.value.scrollTop = scrollContainer.value.scrollHeight
+    }
+  }
+)
 const emit = defineEmits(['clear'])
 
 const {
@@ -278,6 +289,24 @@ const planStepsForStep = (agentStep) => {
   border-left: 2px solid var(--line);
   margin-left: 16px;
   padding-left: 0;
+  animation: fadeInUp 0.3s ease both;
+}
+
+.trace-step-group--active {
+  border-left-color: var(--accent);
+  background: linear-gradient(90deg, rgba(64, 158, 255, 0.06) 0%, transparent 100%);
+  border-radius: 0 8px 8px 0;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .trace-row {

@@ -1,0 +1,26 @@
+{
+  "effective_execution_count": 3,
+  "first_pass_success_count": 3,
+  "self_heal_triggered_count": 0,
+  "self_heal_success_count": 0,
+  "final_success_count": 3,
+  "first_pass_success_rate": 100.0,
+  "self_heal_triggered_rate": 0.0,
+  "self_heal_success_rate": 0.0,
+  "final_success_rate": 100.0,
+  "average_elapsed_seconds": 277.22,
+  "by_scene": {
+    "login": {
+      "count": 3,
+      "first_success": 3,
+      "heal_triggered": 0,
+      "heal_success": 0,
+      "final_success": 3,
+      "avg_elapsed_seconds": 277.22,
+      "first_success_rate": 100.0,
+      "self_heal_triggered_rate": 0.0,
+      "self_heal_success_rate": 0.0,
+      "final_success_rate": 100.0
+    }
+  }
+}

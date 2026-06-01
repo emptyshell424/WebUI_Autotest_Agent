@@ -1,0 +1,53 @@
+{
+  "stats": {
+    "plan": "A",
+    "total_prompts": 3,
+    "gen_success_rate": "3/3 (100.0%)",
+    "exec_success_rate": "1/3 (33.3%)",
+    "overall_success_rate": "1/3 (33.3%)",
+    "avg_gen_time_ms": 11187,
+    "avg_exec_time_ms": 5494,
+    "self_heal_count_total": 0
+  },
+  "details": [
+    {
+      "prompt_id": "001",
+      "prompt": "Assuming a Selenium WebDriver instance named 'driver' is already on Baidu homepage (https://www.baidu.com), use WebDriverWait with 10-second timeout to locate the search input field by CSS selector '#kw', click it to focus, clear any existing text, type 'DeepSeek' into it, then verify that the input's value attribute equals 'DeepSeek'. Do not navigate away or click the search button. Include proper imports and use the existing driver variable. However, for the script to be executable independently, first create a new Chrome driver, navigate to https://www.baidu.com, wait for the page to load, then perform the described steps. At the end, print 'Verification passed' if the value matches, otherwise print 'Verification failed'.",
+      "plan": "A",
+      "gen_success": true,
+      "gen_elapsed_ms": 16656,
+      "gen_error": null,
+      "exec_success": true,
+      "exec_status": "completed",
+      "exec_elapsed_ms": 8187,
+      "exec_error": null,
+      "self_heal_count": 0
+    },
+    {
+      "prompt_id": "002",
+      "prompt": "Assuming a Selenium WebDriver instance named 'driver' is already on Baidu homepage (https://www.baidu.com), use WebDriverWait with 10-second timeout to locate the search input field by CSS selector '#kw', click it to focus, clear any existing text, type the text 'DeepSeek' into it, then verify that the input's value attribute equals 'DeepSeek'. Do not navigate away or click the search button. Include proper imports and use the existing driver variable.",
+      "plan": "A",
+      "gen_success": true,
+      "gen_elapsed_ms": 7968,
+      "gen_error": null,
+      "exec_success": false,
+      "exec_status": "failed",
+      "exec_elapsed_ms": 4156,
+      "exec_error": "Traceback (most recent call last):\n  File \"D:\\GitHub_repo\\00_active\\webui-autotest-agent\\AutoTest_Backend\\runs\\4bf8af28-7d0e-4349-8f15-b294b82ce1ad\\initial\\generated_test.py\", line 7, in <module>\n    wait = WebDriverWait(driver, 10)\n                         ^^^^^^\nNameError: name 'driver' is not defined",
+      "self_heal_count": 0
+    },
+    {
+      "prompt_id": "003",
+      "prompt": "Assuming a Selenium WebDriver instance named 'driver' is already on Baidu homepage (https://www.baidu.com), use WebDriverWait with 10-second timeout to locate the search input field by CSS selector '#kw', click it to focus, clear any existing text, type the text 'DeepSeek' into it, then verify that the input's value attribute equals 'DeepSeek'. Do not navigate away or click the search button. Include proper imports and use the existing driver variable. Do not include any additional steps beyond this verification.",
+      "plan": "A",
+      "gen_success": true,
+      "gen_elapsed_ms": 8937,
+      "gen_error": null,
+      "exec_success": false,
+      "exec_status": "failed",
+      "exec_elapsed_ms": 4139,
+      "exec_error": "Traceback (most recent call last):\n  File \"D:\\GitHub_repo\\00_active\\webui-autotest-agent\\AutoTest_Backend\\runs\\7daa7625-99c2-4ded-80e2-75f54b50e943\\initial\\generated_test.py\", line 6, in <module>\n    wait = WebDriverWait(driver, 10)\n                         ^^^^^^\nNameError: name 'driver' is not defined",
+      "self_heal_count": 0
+    }
+  ]
+}
